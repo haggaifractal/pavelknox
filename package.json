@@ -9,10 +9,11 @@
     "lint": "eslint"
   },
   "dependencies": {
+    "@google/genai": "^1.46.0",
     "firebase": "^12.10.0",
     "firebase-admin": "^13.7.0",
     "lucide-react": "^0.577.0",
-    "next": "16.2.0",
+    "next": "^15.1.9",
     "openai": "^6.32.0",
     "react": "19.2.4",
     "react-dom": "19.2.4"

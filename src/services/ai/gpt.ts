@@ -3,7 +3,7 @@ import { AzureOpenAI } from 'openai';
 const client = new AzureOpenAI({
     apiKey: process.env.AZURE_OPENAI_API_KEY || 'dummy_key_for_build',
     endpoint: process.env.AZURE_OPENAI_ENDPOINT || 'https://dummy.openai.azure.com',
-    apiVersion: process.env.AZURE_OPENAI_API_VERSION || '2024-02-01',
+    apiVersion: process.env.AZURE_OPENAI_API_VERSION || '2024-08-01-preview',
 });
 
 // Using standard GPT-4o deployments
@@ -14,22 +14,27 @@ export interface ParsedKnowledge {
     category: 'commercial' | 'technical' | 'quirks' | 'other';
     content: string;
     tags: string[];
+    isUrgent: boolean;
 }
 
 export async function extractAndRedactKnowledge(rawText: string): Promise<ParsedKnowledge> {
     const systemPrompt = `
-You are a highly secure Knowledge Extraction AI for an enterprise system.
-Your tasks are:
-1. STRICT REDACTION: You MUST explicitly identify and replace any passwords, API keys, access tokens, or obvious secrets with the exact string "[REDACTED]". This is an absolute priority. Do not store or reflect the secrets.
-2. CATEGORIZATION: Map the input to one of the following categories: 'commercial', 'technical', 'quirks', 'other'.
-3. STRUCTURING: Generate a concise title, format the redacted text into a readable structured 'content' string, and extract 2-5 relevant 'tags'.
+אתה סוכן AI חכם ובטוח לחילוץ וסידור ידע עסקי וארגוני מתוך הודעות.
 
-Output MUST be valid JSON matching this schema exactly:
+המשימות שלך:
+1. צנזורה: חובה עליך להחליף סיסמאות קשיחות (Passwords), מפתחות הצפנה (API keys) או טוקנים סודיים למחרוזת "[REDACTED]". שים לב: כתובות אימייל, מספרי טלפון, ושמות לקוחות/עובדים הם *לא* סודות ואין לצנזר אותם לעולם!
+2. דחיפות: כלל ברזל - אם המשתמש מציין שההודעה "דחופה", "קריטית", "בהולה", או מבקש לטפל בזה "עכשיו", עליך להחזיר את הערך "isUrgent" כ-true. אחרת, החזר false.
+3. קטלוג: סווג את התוכן לאחת מהקטגוריות הבאות באנגלית בלבד: 'commercial', 'technical', 'quirks', 'other'.
+4. סידור ויצירת ידע: צור כותרת עניינית קצרה (title), ארגן את הטקסט המסוכם והחכם למבנה קריא בסגנון Markdown בתוך השדה (content), וחלץ 2-5 תגיות רלוונטיות (tags).
+5. פרוטוקול שפה: חובה עליך להוציא את כל הפלט (כותרת, תוכן, תגיות) אך ורק בשפה העברית! אל תתרגם את השפה במקור לאנגלית לעולם. אל תכתוב הערות צד מצדך כמו "המשתמש שאל..". רק תארגן את הידע הגולמי העסקי. אם הפלט הוא רק שיחת חולין, שקף את זה כמו שזה.
+
+הפלט חייב להיות אובייקט JSON תקין לחלוטין התואם לסכמה הזו בדיוק (כשהערכים בעברית לחלוטין למעט הקטגוריה ואמת/שקר):
 {
-  "title": "Short descriptive title",
+  "title": "כותרת קצרה",
   "category": "commercial|technical|quirks|other",
-  "content": "The fully redacted and structured knowledge...",
-  "tags": ["tag1", "tag2"]
+  "isUrgent": false,
+  "content": "המידע המסודר בפורמט מרקדאון...",
+  "tags": ["תגית1", "תגית2"]
 }
 `;
 

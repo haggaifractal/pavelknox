@@ -1,23 +1,34 @@
-import * as admin from 'firebase-admin';
+import { initializeApp, getApps, cert, App } from 'firebase-admin/app';
+import { getFirestore } from 'firebase-admin/firestore';
+import { getAuth } from 'firebase-admin/auth';
 
-if (!admin.apps.length) {
+function getAdminApp(): App {
+    if (getApps().length > 0) {
+        return getApps()[0];
+    }
+
     try {
-        if (process.env.FIREBASE_PRIVATE_KEY) {
-            admin.initializeApp({
-                credential: admin.credential.cert({
-                    projectId: process.env.FIREBASE_PROJECT_ID,
-                    clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
-                    privateKey: process.env.FIREBASE_PRIVATE_KEY.replace(/\\n/g, '\n'),
-                }),
-            });
-        } else {
-            // Fallback for build time or environments using Default Application Credentials
-            admin.initializeApp();
+        if (!process.env.FIREBASE_PRIVATE_KEY) {
+            return initializeApp();
         }
+
+        return initializeApp({
+            credential: cert({
+                projectId: process.env.FIREBASE_PROJECT_ID,
+                clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
+                privateKey: process.env.FIREBASE_PRIVATE_KEY.replace(/\\n/g, '\n'),
+            }),
+        });
     } catch (error: any) {
         console.warn('Firebase Admin Initialization Warning:', error.message);
+        if (getApps().length > 0) {
+            return getApps()[0];
+        }
+        throw error;
     }
 }
 
-export const adminAuth = admin.auth();
-export const adminDb = admin.firestore();
+const app = getAdminApp();
+
+export const adminAuth = getAuth(app);
+export const adminDb = getFirestore(app);

@@ -6,6 +6,10 @@ import { useAuth } from '../contexts/AuthContext';
 export interface Draft {
     id: string;
     text: string | null;
+    title?: string;
+    summary?: string;
+    category?: string;
+    isUrgent?: boolean;
     audioFileId: string | null;
     status: 'received' | 'pending' | 'approved' | 'rejected';
     createdAt: Date;
@@ -23,7 +27,7 @@ export function usePendingDrafts() {
         if (!user) return;
 
         const q = query(
-            collection(db, 'raw_inputs'),
+            collection(db, 'drafts'),
             where('status', '==', 'pending')
         );
 
@@ -33,8 +37,11 @@ export function usePendingDrafts() {
                 const data = doc.data();
                 results.push({
                     id: doc.id,
-                    text: data.text,
-                    audioFileId: data.audioFileId,
+                    title: data.title || '',
+                    summary: data.summary || '',
+                    category: data.category || '',
+                    text: data.content || data.summary || data.redactedText || data.text || '',
+                    audioFileId: data.audioFileId || null,
                     status: data.status,
                     createdAt: data.createdAt?.toDate ? data.createdAt.toDate() : new Date(),
                     chatId: data.chatId,

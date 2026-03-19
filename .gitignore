@@ -48,3 +48,7 @@ _bmad-output/
 .agent/*
 _bmad/*
 _bmad-output/*
+test-*.js 
+test*.ps1 
+verify-*.js 
+verify-*.ts 

@@ -47,6 +47,20 @@ async function processIngestionAsync(docId: string, payload: any) {
 
         console.log(`Successfully parsed, drafted and redacted doc: ${docId}`);
 
+        // 5. Send confirmation back to Telegram
+        const chatId = payload?.message?.chat?.id;
+        const botToken = process.env.TELEGRAM_BOT_TOKEN;
+        if (chatId && botToken) {
+            await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    chat_id: chatId,
+                    text: `✅ נשמר בהצלחה!\n\nכותרת: ${parsedData.title}\nקטגוריה: ${parsedData.category}\n\nהטיוטה ממתינה ב-Inbox באתר.`
+                })
+            }).catch(e => console.error('Failed to send Telegram confirmation:', e));
+        }
+
     } catch (error) {
         console.error('Background ingestion processing failed:', error);
         await adminDb.collection('raw_inputs').doc(docId).update({
@@ -54,6 +68,20 @@ async function processIngestionAsync(docId: string, payload: any) {
             errorDetails: String(error),
             updatedAt: new Date()
         }).catch(console.error);
+
+        // Send error notice to Telegram
+        const chatId = payload?.message?.chat?.id;
+        const botToken = process.env.TELEGRAM_BOT_TOKEN;
+        if (chatId && botToken) {
+            await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    chat_id: chatId,
+                    text: `❌ שגיאה בקליטת ההודעה או בפענוח ה-AI. אנא נסה שנית, או בדוק שגיאות במסוף.`
+                })
+            }).catch(e => console.error('Failed to send Telegram error notice:', e));
+        }
     }
 }
 

@@ -19,6 +19,11 @@ service cloud.firestore {
       allow read, write: if isAdmin();
     }
 
+    // drafts: The new structured drafts from GPT
+    match /drafts/{document=**} {
+      allow read, write: if isAdmin();
+    }
+
     // knowledge_base: The Approved Archive
     // ANY logged-in employee can view the knowledge base.
     // ONLY the Admin can publish new knowledge.
