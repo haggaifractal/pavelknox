@@ -1,0 +1,30 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // Check if user is logged in
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    // Check if user is an admin by email
+    // Configured for both known developer/admin emails
+    function isAdmin() {
+      return isAuthenticated() && (request.auth.token.email in ['chagai33@gmail.com', 'haggai.fractal@gmail.com']);
+    }
+
+    // raw_inputs: The Inbox / Drafts
+    // ONLY the Admin can read and edit drafts.
+    match /raw_inputs/{document=**} {
+      allow read, write: if isAdmin();
+    }
+
+    // knowledge_base: The Approved Archive
+    // ANY logged-in employee can view the knowledge base.
+    // ONLY the Admin can publish new knowledge.
+    match /knowledge_base/{document=**} {
+      allow read: if isAuthenticated();
+      allow write: if isAdmin();
+    }
+  }
+}
