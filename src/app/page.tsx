@@ -78,7 +78,7 @@ export default function DashboardPage() {
     setIsSeeding(false);
   };
 
-  if (!authLoading && !isAdmin) {
+  if (!authLoading && user && !isAdmin) {
     return null; // Will be redirected by useEffect
   }
 
