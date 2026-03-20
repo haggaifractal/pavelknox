@@ -2,34 +2,71 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
     
-    // Check if user is logged in
+    // Core Authentication Check
     function isAuthenticated() {
       return request.auth != null;
     }
 
-    // Check if user is an admin by email
-    // Configured for both known developer/admin emails
-    function isAdmin() {
-      return isAuthenticated() && (request.auth.token.email in ['chagai33@gmail.com', 'haggai.fractal@gmail.com']);
+    // Role Checks via Custom Claims (set by Firebase Admin API)
+    function isSuperAdmin() {
+      // Legacy users without roles or specific owner email default to superadmin
+      return isAuthenticated() && (
+        request.auth.token.role == 'superadmin' || 
+        request.auth.token.get('role', '') == '' || 
+        request.auth.token.email == 'chagai33@gmail.com'
+      );
     }
 
-    // raw_inputs: The Inbox / Drafts
-    // ONLY the Admin can read and edit drafts.
+    function isAdmin() {
+      // SuperAdmins also have Admin privileges
+      return isAuthenticated() && (
+        request.auth.token.role == 'admin' || 
+        isSuperAdmin()
+      );
+    }
+
+    function isViewer() {
+      // Admins and SuperAdmins also have Viewer privileges
+      return isAuthenticated() && (
+        request.auth.token.role == 'viewer' || 
+        isAdmin()
+      );
+    }
+
+    // ------------------------------------------------------------------------
+    // Collection Rules
+    // ------------------------------------------------------------------------
+
+    // Inboxes and Drafts: Only Admins can manage raw inputs and drafted records
     match /raw_inputs/{document=**} {
       allow read, write: if isAdmin();
     }
 
-    // drafts: The new structured drafts from GPT
     match /drafts/{document=**} {
       allow read, write: if isAdmin();
     }
 
-    // knowledge_base: The Approved Archive
-    // ANY logged-in employee can view the knowledge base.
-    // ONLY the Admin can publish new knowledge.
+    // Knowledge Base: Viewable by anyone with access, but only written by Admins
     match /knowledge_base/{document=**} {
-      allow read: if isAuthenticated();
+      allow read: if isViewer();
       allow write: if isAdmin();
+    }
+
+    // Tags: Global metadata dictionary. Readable by viewers, writable by admins.
+    match /tags/{document=**} {
+      allow read: if isViewer();
+      allow write: if isAdmin();
+    }
+
+    // Clients: Global client list. Readable by viewers, writable by admins.
+    match /clients/{document=**} {
+      allow read: if isViewer();
+      allow write: if isAdmin();
+    }
+
+    // Users: Internal metadata mapping if needed. Strictly SuperAdmin.
+    match /users/{document=**} {
+      allow read, write: if isSuperAdmin();
     }
   }
 }
