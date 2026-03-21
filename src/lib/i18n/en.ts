@@ -335,5 +335,28 @@ export const en: typeof he = {
     confirmDelete: 'Are you sure you want to permanently delete raw_inputs older than {days} days?',
     successMessage: 'Cleanup completed successfully. Deleted {count} records.',
     errorCleanup: 'Error performing cleanup',
+  },
+  landing: {
+    heroTitle: 'PavelKnox – The Central Nervous System of your Office 🚀',
+    heroSubtitle: 'Internal AI Agent based knowledge & operations platform – tailored for SMBs.',
+    painPoint: 'Is professional knowledge scattered across folders, messages, and employee memory? Do tasks fall through the cracks after important meetings? PavelKnox transforms your organizational data into an accessible, secure, and active asset.',
+    coreFeaturesTitle: '🔥 Core Capabilities',
+    featVoiceTitle: '🎙️ From Field to Office with Minimal Effort (Voice-to-Task)',
+    featVoiceDesc: 'Finished a court hearing or a client meeting? Send a voice message to a secure Telegram bot on your way back. The Internal AI will transcribe, structure into a readable format, and automatically extract actionable tasks directly into the system.',
+    featChatTitle: '🧠 Organizational Chat: Your Internal AI (RAG)',
+    featChatDesc: 'This is the office\'s private AI that intimately knows your case files and contracts. Natural questions receive accurate answers solely from your archive, with zero hallucinations or external data.',
+    featHumanTitle: '👁️ Nothing Happens Without Approval (Human-in-the-Loop)',
+    featHumanDesc: 'Information isn\'t dumped directly into the archive. The system generates drafts requiring human approval. Only after review and editing is the information published.',
+    featSecurityTitle: '🛡️ Military-Grade Security & Compartmentalization (RBAC)',
+    featSecurityDesc: 'Strict departmental compartmentalization. The Telegram bot is restricted and responds only to authorized employees. Full support for Azure OpenAI security standards.',
+    useCasesTitle: '💼 Who Is It For?',
+    ucLawTitle: '⚖️ Law Firms',
+    ucLawDesc: 'Dictating hearing summaries from the car for automatic task generation, and retrieving clauses from old contracts in seconds.',
+    ucRealEstateTitle: '🏢 Real Estate & Property Management',
+    ucRealEstateDesc: 'An agent leaves a voice note from a property tour – the system opens a ticket and assigns a repair task to logistics.',
+    ucConsultingTitle: '🤝 Consulting & Project Management',
+    ucConsultingDesc: 'A new consultant can ask the AI about objections from a past project and get a factual summary based on the client portfolio.',
+    roiTitle: '📊 Full Cost Control (ROI)',
+    roiDesc: 'A transparent dashboard displaying AI resource (token) consumption per employee, with the ability to set monthly usage quotas.'
   }
 };

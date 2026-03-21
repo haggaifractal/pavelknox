@@ -35,31 +35,36 @@ export default function KnowledgeBasePage() {
         if (!user) return;
         const q = query(collection(db, 'knowledge_base'), orderBy('publishedAt', 'desc'));
         
-        const qPending = query(
-            collection(db, 'drafts'), 
-            where('status', 'in', ['pending', 'in_progress'])
-        );
-        
-        const unsubscribePending = onSnapshot(qPending, (snap) => {
-            let count = 0;
-            const userDeptIds = (user as any)?.departmentIds || [];
-            
-            snap.forEach((doc) => {
-                const data = doc.data();
-                if (data.isDeleted === true) return;
-                
-                const isGlobal = !data.visibilityScope || data.visibilityScope === 'global';
-                const hasIntersection = data.departmentIds?.some((id: string) => userDeptIds.includes(id));
-                const canView = isAdmin || isSuperAdmin || isGlobal || hasIntersection;
+        let unsubscribePending = () => {};
 
-                if (canView) {
-                    count++;
-                }
+        // Only listen to pending drafts if the user has permission to access knowledge control (drafts collection)
+        if (permissions?.canAccessKnowledgeControl || isAdmin || isSuperAdmin) {
+            const qPending = query(
+                collection(db, 'drafts'), 
+                where('status', 'in', ['pending', 'in_progress'])
+            );
+            
+            unsubscribePending = onSnapshot(qPending, (snap) => {
+                let count = 0;
+                const userDeptIds = (user as any)?.departmentIds || [];
+                
+                snap.forEach((doc) => {
+                    const data = doc.data();
+                    if (data.isDeleted === true) return;
+                    
+                    const isGlobal = !data.visibilityScope || data.visibilityScope === 'global';
+                    const hasIntersection = data.departmentIds?.some((id: string) => userDeptIds.includes(id));
+                    const canView = isAdmin || isSuperAdmin || isGlobal || hasIntersection;
+
+                    if (canView) {
+                        count++;
+                    }
+                });
+                setPendingCount(count);
+            }, (error) => {
+                console.error("Failed to count pending drafts:", error);
             });
-            setPendingCount(count);
-        }, (error) => {
-            console.error("Failed to count pending drafts:", error);
-        });
+        }
 
         const unsubscribe = onSnapshot(q, (snapshot) => {
             const results: any[] = [];
