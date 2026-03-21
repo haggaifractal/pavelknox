@@ -4,14 +4,18 @@ import React, { useEffect, useState } from 'react';
 import { useAuth } from '@/lib/contexts/AuthContext';
 import { useTranslation } from '@/lib/contexts/LanguageContext';
 import { auth } from '@/lib/firebase/client';
-import { ShieldAlert, Trash2, Mail, Plus, ArrowLeft } from 'lucide-react';
+import { Mail, Plus, ArrowLeft, Copy, Check, ShieldAlert, Trash2 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
+import DepartmentsManager from '@/components/settings/DepartmentsManager';
+import DepartmentSelector from '@/components/ui/DepartmentSelector';
 
 interface UserData {
   uid: string;
   email: string;
   displayName: string;
   role: 'superadmin' | 'admin' | 'viewer';
+  departmentIds?: string[];
+  telegramChatId?: string;
   lastLoginAt?: string;
   creationTime?: string;
 }
@@ -28,8 +32,12 @@ export default function SettingsPage() {
   
   const [inviteEmail, setInviteEmail] = useState('');
   const [inviteRole, setInviteRole] = useState<'admin' | 'viewer'>('viewer');
+  const [inviteDepartmentIds, setInviteDepartmentIds] = useState<string[]>([]);
+  const [inviteTelegramId, setInviteTelegramId] = useState('');
   const [inviting, setInviting] = useState(false);
   const [inviteResult, setInviteResult] = useState('');
+  const [inviteLink, setInviteLink] = useState('');
+  const [copied, setCopied] = useState(false);
 
   useEffect(() => {
     if (authLoading) return;
@@ -40,9 +48,9 @@ export default function SettingsPage() {
     fetchUsers();
   }, [authLoading, isSuperAdmin]);
 
-  const fetchUsers = async () => {
+  const fetchUsers = async (showLoading = true) => {
     try {
-      setLoading(true);
+      if (showLoading) setLoading(true);
       const token = await currentUser?.getIdToken();
       const res = await fetch('/api/users', {
         headers: { Authorization: `Bearer ${token}` }
@@ -53,7 +61,7 @@ export default function SettingsPage() {
     } catch (err: any) {
       setError(t('settings.errorFetch'));
     } finally {
-      setLoading(false);
+      if (showLoading) setLoading(false);
     }
   };
 
@@ -62,6 +70,8 @@ export default function SettingsPage() {
     if (!inviteEmail) return;
     setInviting(true);
     setInviteResult('');
+    setInviteLink('');
+    setCopied(false);
     try {
       const token = await currentUser?.getIdToken();
       const res = await fetch('/api/users', {
@@ -70,12 +80,21 @@ export default function SettingsPage() {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}` 
         },
-        body: JSON.stringify({ email: inviteEmail, role: inviteRole, displayName: inviteEmail.split('@')[0] })
+        body: JSON.stringify({ 
+          email: inviteEmail, 
+          role: inviteRole, 
+          displayName: inviteEmail.split('@')[0],
+          departmentIds: inviteDepartmentIds,
+          telegramChatId: inviteTelegramId
+        })
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed to invite');
-      setInviteResult(`${t('settings.inviteSuccess')} ${data.resetLink}`);
+      setInviteResult(t('settings.inviteSuccess') || 'משתמש הוזמן בהצלחה! קישור איפוס סיסמה:');
+      setInviteLink(data.resetLink);
       setInviteEmail('');
+      setInviteDepartmentIds([]);
+      setInviteTelegramId('');
       fetchUsers();
     } catch (err: any) {
       alert(err.message);
@@ -85,6 +104,10 @@ export default function SettingsPage() {
   };
 
   const handleRoleChange = async (uid: string, newRole: string) => {
+    // Optimistic Update
+    const previousUsers = [...users];
+    setUsers(users.map(u => u.uid === uid ? { ...u, role: newRole as any } : u));
+    
     try {
       const token = await currentUser?.getIdToken();
       const res = await fetch(`/api/users/${uid}`, {
@@ -96,14 +119,67 @@ export default function SettingsPage() {
         body: JSON.stringify({ role: newRole })
       });
       if (!res.ok) throw new Error('Failed to update role');
-      fetchUsers();
+      fetchUsers(false); // Silent fetch to ensure consistency
     } catch (err: any) {
+      setUsers(previousUsers); // Revert
+      alert(err.message);
+    }
+  };
+
+  const handleDepartmentChange = async (uid: string, newDepartmentIds: string[]) => {
+    // Optimistic Update
+    const previousUsers = [...users];
+    setUsers(users.map(u => u.uid === uid ? { ...u, departmentIds: newDepartmentIds } : u));
+    
+    try {
+      const token = await currentUser?.getIdToken();
+      const res = await fetch(`/api/users/${uid}`, {
+        method: 'PATCH',
+        headers: { 
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}` 
+        },
+        body: JSON.stringify({ departmentIds: newDepartmentIds })
+      });
+      if (!res.ok) throw new Error('Failed to update departments');
+      // No need to fetchUsers() immediately to prevent jitter. Or do silent background fetch.
+      fetchUsers(false);
+    } catch (err: any) {
+      setUsers(previousUsers); // Revert
+      alert(err.message);
+    }
+  };
+
+  const handleTelegramIdChange = async (uid: string, newId: string) => {
+    // Optimistic Update
+    const previousUsers = [...users];
+    setUsers(users.map(u => u.uid === uid ? { ...u, telegramChatId: newId } : u));
+    
+    try {
+      const token = await currentUser?.getIdToken();
+      const res = await fetch(`/api/users/${uid}`, {
+        method: 'PATCH',
+        headers: { 
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}` 
+        },
+        body: JSON.stringify({ telegramChatId: newId })
+      });
+      if (!res.ok) throw new Error('Failed to update Telegram ID');
+      fetchUsers(false);
+    } catch (err: any) {
+      setUsers(previousUsers); // Revert
       alert(err.message);
     }
   };
 
   const handleDelete = async (uid: string) => {
     if (!confirm(t('settings.deleteConfirm'))) return;
+    
+    // Optimistic Update
+    const previousUsers = [...users];
+    setUsers(users.filter(u => u.uid !== uid));
+    
     try {
       const token = await currentUser?.getIdToken();
       const res = await fetch(`/api/users/${uid}`, {
@@ -111,8 +187,9 @@ export default function SettingsPage() {
         headers: { Authorization: `Bearer ${token}` }
       });
       if (!res.ok) throw new Error('Failed to delete');
-      fetchUsers();
+      fetchUsers(false);
     } catch (err: any) {
+      setUsers(previousUsers); // Revert
       alert(err.message);
     }
   };
@@ -182,20 +259,68 @@ export default function SettingsPage() {
                 <option value="admin">{t('settings.roleAdmin')}</option>
               </select>
             </div>
+            <div className="w-full sm:w-48">
+              <label className="block tracking-wide text-xs font-semibold mb-2 text-slate-500">Telegram ID</label>
+              <input 
+                type="text"
+                value={inviteTelegramId}
+                onChange={(e) => setInviteTelegramId(e.target.value)}
+                className="w-full px-4 py-2 bg-slate-50 dark:bg-zinc-950 border border-slate-200 dark:border-zinc-800 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none font-mono"
+                placeholder="123456789"
+              />
+            </div>
+            <div className="w-full sm:w-64 relative">
+               <label className="block tracking-wide text-xs font-semibold mb-2 text-slate-500">{t('settings.departmentAssignLabel')}</label>
+               <DepartmentSelector
+                 selectedIds={inviteDepartmentIds}
+                 onChange={setInviteDepartmentIds}
+                 placeholder={t('settings.departmentSelectPlaceholder')}
+                 disabled={inviting}
+               />
+            </div>
             <button 
               type="submit" 
               disabled={inviting}
-              className="w-full sm:w-auto px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white font-medium rounded-lg transition-colors"
+              className="w-full sm:w-auto px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white font-medium rounded-lg transition-colors h-[42px]"
             >
               {inviting ? t('settings.inviteLoading') : t('settings.inviteBtn')}
             </button>
           </form>
           {inviteResult && (
-             <div className="mt-4 p-4 bg-emerald-50 dark:bg-emerald-950/30 text-emerald-600 dark:text-emerald-400 rounded-lg text-sm break-all font-mono">
-               {inviteResult}
+             <div className="mt-4 p-4 bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-100 dark:border-emerald-900/50 rounded-xl space-y-3">
+               <div className="text-emerald-700 dark:text-emerald-400 text-sm font-medium">
+                 {inviteResult}
+               </div>
+               {inviteLink && (
+                 <div className="flex items-center gap-2 bg-white dark:bg-zinc-900 p-2 rounded-lg border border-emerald-100 dark:border-emerald-800">
+                   <input
+                     type="text"
+                     readOnly
+                     value={inviteLink}
+                     className="flex-1 bg-transparent text-[11px] sm:text-xs text-slate-600 dark:text-zinc-400 outline-none select-all font-mono text-left"
+                     dir="ltr"
+                   />
+                   <button
+                     type="button"
+                     onClick={() => {
+                         navigator.clipboard.writeText(inviteLink);
+                         setCopied(true);
+                         setTimeout(() => setCopied(false), 2000);
+                     }}
+                     className="flex items-center gap-1.5 px-3 py-1.5 shrink-0 bg-emerald-100 hover:bg-emerald-200 dark:bg-emerald-800/40 dark:hover:bg-emerald-700/50 text-emerald-700 dark:text-emerald-300 rounded-md text-xs font-semibold transition-colors outline-none"
+                   >
+                     {copied ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+                     <span className="hidden sm:inline">{copied ? 'הועתק!' : 'העתק קישור'}</span>
+                     <span className="sm:hidden">{copied ? 'הועתק' : 'העתק'}</span>
+                   </button>
+                 </div>
+               )}
              </div>
           )}
         </section>
+
+        {/* Departments Manager */}
+        <DepartmentsManager />
 
         {/* Users Table */}
         <section className="bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 rounded-2xl shadow-sm overflow-hidden">
@@ -204,7 +329,9 @@ export default function SettingsPage() {
                 <thead className="text-xs uppercase bg-slate-50 dark:bg-zinc-950/50 text-slate-500 font-semibold border-b border-slate-200 dark:border-zinc-800">
                   <tr>
                     <th className="px-6 py-4">{t('settings.tableEmail')}</th>
-                    <th className="px-6 py-4 w-48">{t('settings.tableRole')}</th>
+                    <th className="px-6 py-4 w-40">Telegram ID</th>
+                    <th className="px-6 py-4 w-40">{t('settings.tableRole')}</th>
+                    <th className="px-6 py-4 w-64 hidden sm:table-cell">{t('settings.tableDepartments')}</th>
                     <th className="px-6 py-4 hidden md:table-cell">{t('settings.tableLastLogin')}</th>
                     <th className="px-6 py-4 w-24 text-center">{t('settings.tableActions')}</th>
                   </tr>
@@ -222,6 +349,15 @@ export default function SettingsPage() {
                         </div>
                       </td>
                       <td className="px-6 py-4">
+                        <input
+                          type="text"
+                          value={u.telegramChatId || ''}
+                          onChange={(e) => handleTelegramIdChange(u.uid, e.target.value)}
+                          placeholder="ID..."
+                          className="bg-transparent border border-slate-200 dark:border-zinc-700 rounded p-1 outline-none focus:ring-2 focus:ring-indigo-500 w-full font-mono text-sm"
+                        />
+                      </td>
+                      <td className="px-6 py-4">
                         <select 
                           value={u.role}
                           onChange={(e) => handleRoleChange(u.uid, e.target.value)}
@@ -232,6 +368,16 @@ export default function SettingsPage() {
                           <option value="admin">{t('settings.roleAdmin')}</option>
                           <option value="viewer">{t('settings.roleViewer')}</option>
                         </select>
+                      </td>
+                      <td className="px-6 py-4 hidden sm:table-cell">
+                         <div className="w-full relative z-10 w-48 lg:w-full">
+                           <DepartmentSelector
+                             selectedIds={u.departmentIds || []}
+                             onChange={(ids) => handleDepartmentChange(u.uid, ids)}
+                             placeholder={t('settings.allDepartmentsPlaceholder')}
+                             disabled={u.uid === currentUser?.uid && u.role === 'superadmin'}
+                           />
+                         </div>
                       </td>
                       <td className="px-6 py-4 hidden md:table-cell text-slate-500">
                          {u.lastLoginAt ? new Date(u.lastLoginAt).toLocaleDateString() : 'Never'}

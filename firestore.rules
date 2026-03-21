@@ -2,54 +2,95 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
     
-    // Core Authentication Check
+    // Helper Functions for RBAC
     function isAuthenticated() {
       return request.auth != null;
     }
 
-    // Role Checks via Custom Claims (set by Firebase Admin API)
+    function getUserData() {
+      let userDoc = get(/databases/$(database)/documents/users/$(request.auth.uid));
+      return userDoc != null ? userDoc.data : {};
+    }
+
+    function getRole() {
+      // Prioritize database role for immediate updates, fallback to token claim
+      let data = getUserData();
+      let dbRole = data.keys().hasAll(['role']) ? data.role : '';
+      let claimRole = request.auth.token.get('role', '');
+      return dbRole != '' ? dbRole : claimRole;
+    }
+
     function isSuperAdmin() {
-      // Legacy users without roles or specific owner email default to superadmin
+      let role = getRole();
       return isAuthenticated() && (
-        request.auth.token.role == 'superadmin' || 
-        request.auth.token.get('role', '') == '' || 
+        role == 'superadmin' || 
+        // Fallback for primary owner
         request.auth.token.email == 'chagai33@gmail.com'
       );
     }
 
     function isAdmin() {
+      let role = getRole();
       // SuperAdmins also have Admin privileges
       return isAuthenticated() && (
-        request.auth.token.role == 'admin' || 
+        role == 'admin' || 
         isSuperAdmin()
       );
     }
 
     function isViewer() {
+      let role = getRole();
       // Admins and SuperAdmins also have Viewer privileges
       return isAuthenticated() && (
-        request.auth.token.role == 'viewer' || 
-        isAdmin()
+        role == 'viewer' || 
+        isAdmin() ||
+        // If they have no role yet, they can't view by default, unless superadmin fallback matched.
+        isSuperAdmin()
       );
+    }
+
+    // ------------------------------------------------------------------------
+    // Granular RBAC Checks from DB
+    // ------------------------------------------------------------------------
+
+    function hasPermission(perm) {
+      let data = getUserData();
+      return data.keys().hasAll(['permissions']) && data.permissions.get(perm, false) == true;
+    }
+
+    function canAccessKnowledgeControl() {
+      return isAdmin() || hasPermission('canAccessKnowledgeControl');
+    }
+
+    function canCreateTasks() {
+      return isAdmin() || hasPermission('canCreateTasks');
+    }
+
+    function canEditTasks() {
+      return isAdmin() || hasPermission('canEditTasks');
+    }
+
+    function canDeleteTasks() {
+      return isAdmin() || hasPermission('canDeleteTasks');
     }
 
     // ------------------------------------------------------------------------
     // Collection Rules
     // ------------------------------------------------------------------------
 
-    // Inboxes and Drafts: Only Admins can manage raw inputs and drafted records
+    // Inboxes and Drafts: Knowledge Control Center access
     match /raw_inputs/{document=**} {
-      allow read, write: if isAdmin();
+      allow read, write: if canAccessKnowledgeControl();
     }
 
     match /drafts/{document=**} {
-      allow read, write: if isAdmin();
+      allow read, write: if canAccessKnowledgeControl();
     }
 
-    // Knowledge Base: Viewable by anyone with access, but only written by Admins
+    // Knowledge Base: Viewable by anyone with access, but only written by Knowledge Control
     match /knowledge_base/{document=**} {
       allow read: if isViewer();
-      allow write: if isAdmin();
+      allow write: if canAccessKnowledgeControl();
     }
 
     // Tags: Global metadata dictionary. Readable by viewers, writable by admins.
@@ -58,12 +99,22 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
-    // Tasks: Extracted action items. Readable by viewers, writable by admins.
-    match /tasks/{document=**} {
+    // Tasks: Action items
+    match /tasks/{taskId} {
       allow read: if isViewer();
-      allow write: if isAdmin() &&
+      allow create: if canCreateTasks() &&
                    (!request.resource.data.keys().hasAny(['title']) || request.resource.data.title.size() <= 100) &&
                    (!request.resource.data.keys().hasAny(['description']) || request.resource.data.description.size() <= 1000);
+      allow update: if isViewer() &&
+                   (!request.resource.data.keys().hasAny(['title']) || request.resource.data.title.size() <= 100) &&
+                   (!request.resource.data.keys().hasAny(['description']) || request.resource.data.description.size() <= 1000);
+      allow delete: if canDeleteTasks();
+
+      match /comments/{commentId} {
+        allow read: if isViewer();
+        allow create: if isViewer() && request.resource.data.authorId == request.auth.uid;
+        allow update, delete: if canEditTasks() || request.auth.uid == resource.data.authorId;
+      }
     }
 
     // Clients: Global client list. Readable by viewers, writable by admins.
@@ -77,9 +128,16 @@ service cloud.firestore {
                    (!request.resource.data.keys().hasAny(['cost']) || request.resource.data.cost is int);
     }
 
-    // Users: Internal metadata mapping if needed. Strictly SuperAdmin.
-    match /users/{document=**} {
-      allow read, write: if isSuperAdmin();
+    // Departments: Organization departments. Readable by viewers, writable by super admins.
+    match /departments/{document=**} {
+      allow read: if isViewer();
+      allow write: if isSuperAdmin();
+    }
+
+    // Users: Users can read their own document (to get granular permissions). SuperAdmin can manage all.
+    match /users/{userId} {
+      allow read: if isSuperAdmin() || request.auth.uid == userId;
+      allow write: if isSuperAdmin();
     }
   }
 }

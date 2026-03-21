@@ -6,9 +6,14 @@ export interface Task {
   clientName?: string; // Associated client for easy filtering
   projectName?: string; // Associated project name
   description: string; // The specific action item extracted
-  assignee: string | null; // Extracted name of who is responsible
+  assignee: string | null; // Extracted name of who is responsible or external contact name
+  assigneeId?: string | null; // UID of the system user, if applicable
+  externalContactName?: string | null; // Name of external contact if not a system user
   deadline: string | null; // Extracted ISO format date string for the deadline, or null if open-ended
   status: 'pending' | 'in_progress' | 'completed'; // Lifecycle state
+  statusUpdatedAt?: any; // Firestore Timestamp or Date of last status change
+  visibilityScope?: 'global' | 'department'; // Who can see this task
+  departmentIds?: string[]; // Departments this task belongs to
   createdAt: any; // Firestore Timestamp or Date
   updatedAt: any; // Firestore Timestamp or Date
 }

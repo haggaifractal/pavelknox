@@ -24,7 +24,7 @@ import TagSelector from '@/components/ui/TagSelector';
 import ClientSelector from '@/components/ui/ClientSelector';
 
 export default function DraftsPage() {
-    const { user, isAdmin, isSuperAdmin } = useAuth();
+    const { user, isAdmin, isSuperAdmin, permissions, loading: authLoading } = useAuth();
     const router = useRouter();
     const [filterStatus, setFilterStatus] = useState<string>('pending');
     const [filterTag, setFilterTag] = useState<string>('');
@@ -305,6 +305,26 @@ export default function DraftsPage() {
         hidden: { opacity: 0, y: 10 },
         show: { opacity: 1, y: 0, transition: { type: "spring", stiffness: 300, damping: 24 } }
     };
+
+    if (!authLoading && user && !permissions?.canAccessKnowledgeControl) {
+        return (
+            <AuthGuard>
+                <div className="min-h-screen bg-slate-50 dark:bg-zinc-950 flex flex-col items-center justify-center p-4">
+                    <Lock className="w-16 h-16 text-rose-500 mb-4" />
+                    <h1 className="text-2xl font-bold text-slate-900 dark:text-zinc-100 mb-2">גישה נדחתה</h1>
+                    <p className="text-slate-600 dark:text-zinc-400 text-center max-w-md mb-6">
+                        {t('drafts.permissionDenied') || 'אין לך הרשאה לגשת למרכז בקרת המידע.'}
+                    </p>
+                    <button
+                        onClick={() => router.push('/')}
+                        className="px-6 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold rounded-xl transition-colors shadow-sm outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 dark:focus:ring-offset-zinc-950"
+                    >
+                        {t('common.backToHome') || 'חזרה לדף הבית'}
+                    </button>
+                </div>
+            </AuthGuard>
+        );
+    }
 
     return (
         <AuthGuard>

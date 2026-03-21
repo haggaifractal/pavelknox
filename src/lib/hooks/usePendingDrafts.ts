@@ -18,6 +18,8 @@ export interface Draft {
     createdAt: Date;
     chatId?: number;
     messageId?: number;
+    visibilityScope?: 'global' | 'department';
+    departmentIds?: string[];
 }
 
 export interface DraftFilter {
@@ -32,7 +34,7 @@ export function usePendingDrafts(filter: DraftFilter = { status: 'pending' }, pa
     const [hasMore, setHasMore] = useState(true);
     const [error, setError] = useState<Error | null>(null);
     const [currentLimit, setCurrentLimit] = useState(pageSize);
-    const { user } = useAuth();
+    const { user, isAdmin } = useAuth();
 
     // Reset pagination limit when filters change
     useEffect(() => {
@@ -60,22 +62,32 @@ export function usePendingDrafts(filter: DraftFilter = { status: 'pending' }, pa
         
         const unsubscribe = onSnapshot(q, (snapshot) => {
             const results: Draft[] = [];
+            const userDeptIds = (user as any)?.departmentIds || [];
             snapshot.forEach((doc) => {
                 const data = doc.data();
-                results.push({
-                    id: doc.id,
-                    title: data.title || '',
-                    summary: data.summary || '',
-                    category: data.category || '',
-                    clientName: data.clientName || '',
-                    tags: data.tags || [],
-                    text: data.content || data.summary || data.redactedText || data.text || '',
-                    audioFileId: data.audioFileId || null,
-                    status: data.status || 'pending',
-                    createdAt: data.createdAt?.toDate ? data.createdAt.toDate() : new Date(),
-                    chatId: data.chatId,
-                    messageId: data.messageId,
-                });
+                
+                const isGlobal = !data.visibilityScope || data.visibilityScope === 'global';
+                const hasIntersection = data.departmentIds?.some((id: string) => userDeptIds.includes(id));
+                const canView = isAdmin || isGlobal || hasIntersection;
+
+                if (canView) {
+                    results.push({
+                        id: doc.id,
+                        title: data.title || '',
+                        summary: data.summary || '',
+                        category: data.category || '',
+                        clientName: data.clientName || '',
+                        tags: data.tags || [],
+                        text: data.content || data.summary || data.redactedText || data.text || '',
+                        audioFileId: data.audioFileId || null,
+                        status: data.status || 'pending',
+                        createdAt: data.createdAt?.toDate ? data.createdAt.toDate() : new Date(),
+                        chatId: data.chatId,
+                        messageId: data.messageId,
+                        visibilityScope: data.visibilityScope || 'global',
+                        departmentIds: data.departmentIds || []
+                    });
+                }
             });
 
             setDrafts(results);

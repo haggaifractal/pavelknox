@@ -16,6 +16,7 @@ import { useTranslation } from '@/lib/contexts/LanguageContext';
 import MergeDraftsModal from '@/components/ui/MergeDraftsModal';
 import ClientSelector from '@/components/ui/ClientSelector';
 import TagSelector from '@/components/ui/TagSelector';
+import DepartmentSelector from '@/components/ui/DepartmentSelector';
 
 interface EditorPageProps {
     params: Promise<{ id: string }>;
@@ -32,8 +33,13 @@ export default function DraftEditorPage({ params }: EditorPageProps) {
     const [title, setTitle] = useState('');
     const [content, setContent] = useState('');
     const [clientName, setClientName] = useState('');
+    const [clientId, setClientId] = useState('');
+    const [status, setStatus] = useState<'pending' | 'in_progress' | 'approved' | 'rejected'>('pending');
     const [tags, setTags] = useState<string[]>([]);
-    const [status, setStatus] = useState<'pending'|'in_progress'|'approved'>('pending');
+    const [visibilityScope, setVisibilityScope] = useState<'global'|'department'>('global');
+    const [departmentIds, setDepartmentIds] = useState<string[]>([]);
+    
+    // UI state
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState('');
@@ -59,6 +65,8 @@ export default function DraftEditorPage({ params }: EditorPageProps) {
                     setClientName(data.clientName || '');
                     setTags(data.tags || []);
                     setStatus(data.status || 'pending');
+                    setVisibilityScope(data.visibilityScope || 'global');
+                    setDepartmentIds(data.departmentIds || []);
                 } else {
                     setError(t('editor.errorNotFound'));
                 }
@@ -79,7 +87,8 @@ export default function DraftEditorPage({ params }: EditorPageProps) {
             if (!draft || loading || !isAdmin) return;
 
             const tagsChanged = JSON.stringify(tags) !== JSON.stringify((draft as any).tags || []);
-            if (content !== (draft as any).editedText || title !== (draft as any).title || clientName !== (draft as any).clientName || status !== (draft as any).status || tagsChanged) {
+            const depsChanged = JSON.stringify(departmentIds) !== JSON.stringify((draft as any).departmentIds || []);
+            if (content !== (draft as any).editedText || title !== (draft as any).title || clientName !== (draft as any).clientName || status !== (draft as any).status || tagsChanged || visibilityScope !== (draft as any).visibilityScope || depsChanged) {
                 setSaving(true);
                 try {
                     await updateDoc(doc(db, 'drafts', draftId), {
@@ -88,9 +97,11 @@ export default function DraftEditorPage({ params }: EditorPageProps) {
                         clientName: clientName,
                         tags: tags,
                         status: status,
+                        visibilityScope: visibilityScope,
+                        departmentIds: departmentIds,
                         lastSavedAt: new Date()
                     });
-                    setDraft(prev => prev ? { ...prev, editedText: content, title: title, clientName: clientName, tags: tags, status: status } as any : prev);
+                    setDraft(prev => prev ? { ...prev, editedText: content, title: title, clientName: clientName, tags: tags, status: status, visibilityScope, departmentIds } as any : prev);
                 } catch (e) {
                     console.error("Auto-save failed", e);
                 } finally {
@@ -149,7 +160,9 @@ export default function DraftEditorPage({ params }: EditorPageProps) {
                 clientName: clientName,
                 tags: tags,
                 sourceDraftId: draftId,
-                publishedAt: publishDate
+                publishedAt: publishDate,
+                visibilityScope: visibilityScope,
+                departmentIds: departmentIds
             });
 
             // Update associated tasks to point to the new knowledge base document
@@ -395,6 +408,29 @@ export default function DraftEditorPage({ params }: EditorPageProps) {
                                     </div>
 
                                     <div className="relative">
+                                        <label htmlFor="visibility-select" className="sr-only">הרשאות צפייה</label>
+                                        <select 
+                                            id="visibility-select"
+                                            value={visibilityScope}
+                                            onChange={(e) => setVisibilityScope(e.target.value as any)}
+                                            className="appearance-none bg-white dark:bg-zinc-900/80 border border-slate-200 dark:border-zinc-800 text-slate-700 dark:text-zinc-300 text-[13px] rounded-lg rtl:pl-8 rtl:pr-4 ltr:pr-8 ltr:pl-4 py-2 hover:border-slate-300 dark:hover:border-zinc-700 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-colors shadow-sm min-w-[140px] cursor-pointer"
+                                        >
+                                            <option value="global">{t('editor.visibilityGlobal') || 'כללי (לכולם)'}</option>
+                                            <option value="department">{t('editor.visibilityDepartment') || 'לפי מחלקה'}</option>
+                                        </select>
+                                    </div>
+
+                                    {visibilityScope === 'department' && (
+                                        <div className="w-[200px] z-10">
+                                            <DepartmentSelector 
+                                                selectedIds={departmentIds} 
+                                                onChange={setDepartmentIds} 
+                                                placeholder={t('editor.departmentPlaceholder') || 'בחר מחלקות...'}
+                                            />
+                                        </div>
+                                    )}
+
+                                    <div className="relative">
                                         <label htmlFor="status-select" className="sr-only">סטטוס</label>
                                         <select 
                                             id="status-select"
@@ -431,7 +467,7 @@ export default function DraftEditorPage({ params }: EditorPageProps) {
                     onClose={() => setIsTasksPanelOpen(false)} 
                     draftId={draftId as string} 
                     content={content} 
-                    metadata={{ title, clientName, tags }} 
+                    metadata={{ title, clientName, tags, visibilityScope, departmentIds }} 
                 />
             </div>
         </AuthGuard>

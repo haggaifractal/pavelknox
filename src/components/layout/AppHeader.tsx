@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { collection, query, where, onSnapshot } from 'firebase/firestore';
 import { db } from '@/lib/firebase/client';
 import { useAuth } from '@/lib/contexts/AuthContext';
@@ -18,7 +18,27 @@ export function AppHeader() {
     const { t } = useTranslation();
     const router = useRouter();
     const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+    const menuRef = useRef<HTMLDivElement>(null);
 
+    useEffect(() => {
+        const handleClickOutside = (event: MouseEvent) => {
+            if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
+                // Ensure the click wasn't on the hamburger button itself
+                // (which would result in closing then immediately re-opening)
+                const target = event.target as Element;
+                if (!target.closest('button[aria-label="Toggle menu"]')) {
+                    setIsMobileMenuOpen(false);
+                }
+            }
+        };
+
+        if (isMobileMenuOpen) {
+            document.addEventListener('mousedown', handleClickOutside);
+        }
+        return () => {
+            document.removeEventListener('mousedown', handleClickOutside);
+        };
+    }, [isMobileMenuOpen]);
 
     const handleLogout = async () => {
         try {
@@ -84,7 +104,7 @@ export function AppHeader() {
                                     <button
                                         onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
                                         className="p-2 text-slate-600 dark:text-zinc-300 hover:bg-slate-100 dark:hover:bg-zinc-800 rounded-lg transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
-                                        aria-label={isMobileMenuOpen ? 'Close menu' : 'Open menu'}
+                                        aria-label="Toggle menu"
                                     >
                                         {isMobileMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
                                     </button>
@@ -109,7 +129,10 @@ export function AppHeader() {
 
                 {/* Dropdown Menu (Mobile + Desktop secondary items) */}
                 {isMobileMenuOpen && user && (
-                    <div className="absolute rtl:left-0 rtl:right-auto ltr:right-0 ltr:left-auto sm:rtl:left-6 sm:ltr:right-6 top-16 w-full sm:w-64 border-b sm:border sm:rounded-b-2xl sm:shadow-2xl border-slate-200 dark:border-zinc-800 bg-white/95 dark:bg-zinc-950/95 backdrop-blur-xl px-4 py-3 flex flex-col gap-2 shadow-lg animate-in slide-in-from-top-2 z-40 transform origin-top">
+                    <div 
+                        ref={menuRef}
+                        className="absolute rtl:left-0 rtl:right-auto ltr:right-0 ltr:left-auto sm:rtl:left-6 sm:ltr:right-6 top-16 w-full sm:w-64 border-b sm:border sm:rounded-b-2xl sm:shadow-2xl border-slate-200 dark:border-zinc-800 bg-white/95 dark:bg-zinc-950/95 backdrop-blur-xl px-4 py-3 flex flex-col gap-2 shadow-lg animate-in slide-in-from-top-2 z-50 transform origin-top"
+                    >
                         
                         {/* Mobile Only Links (Shown in hamburger on mobile, but main header on desktop) */}
                         <div className="sm:hidden flex flex-col gap-2 mb-2 pb-2 border-b border-slate-100 dark:border-zinc-800">

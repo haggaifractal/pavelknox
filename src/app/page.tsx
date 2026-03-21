@@ -12,7 +12,7 @@ import { useTranslation } from '@/lib/contexts/LanguageContext';
 import { where } from 'firebase/firestore';
 
 export default function KnowledgeBasePage() {
-    const { user } = useAuth();
+    const { user, permissions } = useAuth();
     const router = useRouter();
     const [documents, setDocuments] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
@@ -108,21 +108,23 @@ export default function KnowledgeBasePage() {
                             transition={{ delay: 0.2 }}
                             className="flex items-center gap-3 shrink-0 flex-wrap sm:flex-nowrap"
                         >
-                            <button
-                                onClick={() => router.push('/drafts')}
-                                className="relative inline-flex items-center h-10 px-5 border border-slate-200 dark:border-zinc-800 text-[13px] font-semibold rounded-xl text-slate-700 dark:text-zinc-300 bg-white dark:bg-zinc-900/50 hover:bg-slate-50 dark:hover:bg-zinc-800 shadow-sm transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 w-full sm:w-auto justify-center"
-                            >
-                                <FileText className="w-4 h-4 rtl:ml-2 ltr:mr-2 opacity-70" aria-hidden="true" />
-                                {t('dashboard.title')}
-                                {pendingCount > 0 && (
-                                    <span 
-                                        title={`יש ${pendingCount} טיוטות ממתינות`}
-                                        className="absolute -top-1.5 -right-1.5 ltr:-right-1.5 rtl:right-auto rtl:-left-1.5 flex h-5 min-w-[20px] items-center justify-center rounded-full bg-rose-500 px-1.5 text-[11px] font-bold text-white shadow-sm ring-2 ring-slate-50 dark:ring-zinc-950"
-                                    >
-                                        {pendingCount > 99 ? '99+' : pendingCount}
-                                    </span>
-                                )}
-                            </button>
+                            {permissions?.canAccessKnowledgeControl && (
+                                <button
+                                    onClick={() => router.push('/drafts')}
+                                    className="relative inline-flex items-center h-10 px-5 border border-slate-200 dark:border-zinc-800 text-[13px] font-semibold rounded-xl text-slate-700 dark:text-zinc-300 bg-white dark:bg-zinc-900/50 hover:bg-slate-50 dark:hover:bg-zinc-800 shadow-sm transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 w-full sm:w-auto justify-center"
+                                >
+                                    <FileText className="w-4 h-4 rtl:ml-2 ltr:mr-2 opacity-70" aria-hidden="true" />
+                                    {t('dashboard.title')}
+                                    {pendingCount > 0 && (
+                                        <span 
+                                            title={`יש ${pendingCount} טיוטות ממתינות`}
+                                            className="absolute -top-1.5 -right-1.5 ltr:-right-1.5 rtl:right-auto rtl:-left-1.5 flex h-5 min-w-[20px] items-center justify-center rounded-full bg-rose-500 px-1.5 text-[11px] font-bold text-white shadow-sm ring-2 ring-slate-50 dark:ring-zinc-950"
+                                        >
+                                            {pendingCount > 99 ? '99+' : pendingCount}
+                                        </span>
+                                    )}
+                                </button>
+                            )}
                         </motion.div>
                     </header>
                     

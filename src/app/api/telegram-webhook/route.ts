@@ -4,7 +4,7 @@ import { getFileUrl, downloadFileAsBuffer } from '@/services/telegram/client';
 import { transcribeAudio } from '@/services/ai/whisper';
 import { extractAndRedactKnowledge } from '@/services/ai/gpt';
 
-async function processIngestionAsync(docId: string, payload: any) {
+async function processIngestionAsync(docId: string, payload: any, uid: string) {
     try {
         console.log(`Starting background processing for doc: ${docId}`);
 
@@ -29,11 +29,11 @@ async function processIngestionAsync(docId: string, payload: any) {
         const chatIdStr = payload?.message?.chat?.id?.toString() || 'unknown';
 
         // 1.5 Security Limits Check
-        const adminStatsRef = adminDb.collection('telegram_admins').doc(chatIdStr);
-        const adminStatsDoc = await adminStatsRef.get();
-        const adminStats = adminStatsDoc.exists ? adminStatsDoc.data() : null;
-        const currentTokens = adminStats?.tokensUsedThisMonth || 0;
-        const maxTokens = adminStats?.monthlyLimit || 5000000; // 5M tokens default
+        const userRef = adminDb.collection('users').doc(uid);
+        const userDoc = await userRef.get();
+        const userData = userDoc.exists ? userDoc.data() : null;
+        const currentTokens = userData?.tokensUsedThisMonth || 0;
+        const maxTokens = userData?.monthlyTokenLimit || 5000000; // 5M tokens default
 
         if (currentTokens >= maxTokens) {
              const botToken = process.env.TELEGRAM_BOT_TOKEN;
@@ -47,7 +47,7 @@ async function processIngestionAsync(docId: string, payload: any) {
                      })
                  });
              }
-             console.error(`Admin ${chatIdStr} reached high security token limit.`);
+             console.error(`User ${uid} reached high security token limit.`);
              return; // Abort processing
         }
 
@@ -59,7 +59,7 @@ async function processIngestionAsync(docId: string, payload: any) {
         const totalTokens = usage?.total_tokens || 0;
         const { FieldValue } = await import('firebase-admin/firestore');
         
-        await adminStatsRef.set({
+        await userRef.set({
             tokensUsedThisMonth: FieldValue.increment(totalTokens),
             lifetimeTokensUsed: FieldValue.increment(totalTokens),
             lastActivityDate: new Date()
@@ -71,7 +71,8 @@ async function processIngestionAsync(docId: string, payload: any) {
             query: extractedText,
             response: JSON.stringify(parsedData),
             source: 'Telegram',
-            userId: chatIdStr,
+            userId: uid,
+            telegramChatId: chatIdStr,
             promptTokens: usage?.prompt_tokens || 0,
             completionTokens: usage?.completion_tokens || 0,
             totalTokens: totalTokens
@@ -177,6 +178,36 @@ export async function POST(request: Request) {
         }
 
         const { message_id, chat, text, voice } = payload.message;
+        const chatIdStr = chat?.id?.toString();
+
+        if (!chatIdStr) return NextResponse.json({ ok: true });
+
+        // בקרת גישה (Authorization) ספציפית דרך אוסף users
+        const usersSnapshot = await adminDb.collection('users')
+          .where('telegramChatId', '==', chatIdStr)
+          .limit(1)
+          .get();
+
+        if (usersSnapshot.empty) {
+            // לא מורשה - נחזיר את מזהה הטלגרם למשתמש כדי שיוכל לתת למנהל
+            const botToken = process.env.TELEGRAM_BOT_TOKEN;
+            if (botToken) {
+                await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        chat_id: chat.id,
+                        text: `לא מורשה! כדי להתחבר למערכת, אנא העבר למנהל המערכת את מזהה הטלגרם שלך: \`${chatIdStr}\``,
+                        parse_mode: 'Markdown'
+                    })
+                }).catch(e => console.error('Failed to send auth rejection', e));
+            }
+            console.warn(`Unauthorized telegram webhook attempt from chat id: ${chatIdStr}`);
+            return NextResponse.json({ ok: true }); // חשוב להחזיר 200 כדי שטלגרם לא תנסה שוב
+        }
+
+        const uid = usersSnapshot.docs[0].id;
+
         const hasAudio = !!voice?.file_id;
         const hasText = !!text;
 
@@ -194,9 +225,8 @@ export async function POST(request: Request) {
         // שמירה מהירה לדאטה-בייס לפני החזרת התשובה
         const docRef = await adminDb.collection('raw_inputs').add(rawInput);
 
-        // אם קיים מידע לעיבוד (טקסט או קול) - נריץ ברקע וללא המתנה (Fire and forget)
         if (hasAudio || hasText) {
-            processIngestionAsync(docRef.id, payload).catch(console.error);
+            processIngestionAsync(docRef.id, payload, uid).catch(console.error);
         }
 
         // חובה להחזיר 200 מהר כדי שטלגרם לא תשלח את ההודעה שוב בלופ

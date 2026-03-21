@@ -3,14 +3,14 @@
 import AuthGuard from '@/components/ui/AuthGuard';
 import { useTranslation } from '@/lib/contexts/LanguageContext';
 import { useAuth } from '@/lib/contexts/AuthContext';
-import { Users, Trash2, Plus, Loader2, AlertCircle, Upload, Download, X } from 'lucide-react';
+import { Users, Trash2, Plus, Loader2, AlertCircle, Upload, Download, X, Edit2, Check } from 'lucide-react';
 import { useState, useRef } from 'react';
 import { useClients, Client } from '@/lib/hooks/useClients';
 
 export default function ClientsPage() {
     const { t } = useTranslation();
     const { user } = useAuth();
-    const { clients, loading, error, addClient, importClients } = useClients();
+    const { clients, loading, error, addClient, updateClient, importClients } = useClients();
     
     const [isAddMode, setIsAddMode] = useState(false);
     const [formData, setFormData] = useState({
@@ -21,6 +21,11 @@ export default function ClientsPage() {
     const [deletingId, setDeletingId] = useState<string | null>(null);
     const [actionError, setActionError] = useState('');
     const [importing, setImporting] = useState(false);
+    
+    // Edit states
+    const [editingClientId, setEditingClientId] = useState<string | null>(null);
+    const [editFormData, setEditFormData] = useState<Partial<Client>>({});
+    const [isSavingEdit, setIsSavingEdit] = useState(false);
     
     // New states for CSV Preview & Bulk Delete
     const [importPreviewData, setImportPreviewData] = useState<{ client: Omit<Client, 'id'|'createdAt'>, isValid: boolean, error?: string, idx: number }[]>([]);
@@ -68,6 +73,20 @@ export default function ClientsPage() {
             setActionError(err.message || 'Failed to add client.');
         } finally {
             setIsSubmitting(false);
+        }
+    };
+
+    const handleSaveEdit = async () => {
+        if (!editingClientId || !editFormData.name?.trim()) return;
+        setIsSavingEdit(true);
+        setActionError('');
+        try {
+            await updateClient(editingClientId, editFormData as Omit<Client, 'id' | 'createdAt'>);
+            setEditingClientId(null);
+        } catch (err: any) {
+            setActionError(err.message || 'Failed to update client.');
+        } finally {
+            setIsSavingEdit(false);
         }
     };
 
@@ -539,32 +558,107 @@ export default function ClientsPage() {
                                             className="w-4 h-4 text-indigo-600 bg-white dark:bg-zinc-900 border-slate-300 dark:border-zinc-600 rounded focus:ring-indigo-500 cursor-pointer"
                                         />
                                     </div>
-                                    <div className="flex flex-col flex-1">
-                                        <div className="flex flex-col md:flex-row md:items-center gap-2 md:gap-4 mb-1">
-                                            <span className="font-semibold text-lg text-slate-900 dark:text-zinc-100">{client.name}</span>
-                                            {client.createdAt && (
-                                                <span className="text-xs text-slate-400 dark:text-zinc-500 hidden md:inline-block">
-                                                    נוסף ב- {new Date(client.createdAt).toLocaleDateString('he-IL', { timeZone: 'Asia/Jerusalem' })}
-                                                </span>
-                                            )}
+                                    
+                                    {editingClientId === client.id ? (
+                                        <div className="flex flex-col flex-1 gap-2">
+                                            <input
+                                                type="text"
+                                                value={editFormData.name || ''}
+                                                onChange={(e) => setEditFormData({...editFormData, name: e.target.value})}
+                                                className="w-full px-3 py-1.5 bg-white dark:bg-zinc-900 border border-slate-300 dark:border-zinc-600 rounded-md text-sm font-semibold text-slate-900 dark:text-zinc-100"
+                                                placeholder="שם הלקוח"
+                                                autoFocus
+                                            />
+                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-sm">
+                                                <input
+                                                    type="text"
+                                                    value={editFormData.contactPerson || ''}
+                                                    onChange={(e) => setEditFormData({...editFormData, contactPerson: e.target.value})}
+                                                    className="w-full px-3 py-1.5 bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-700 rounded-md"
+                                                    placeholder="איש קשר"
+                                                />
+                                                <input
+                                                    type="tel"
+                                                    value={editFormData.phone || ''}
+                                                    onChange={(e) => setEditFormData({...editFormData, phone: e.target.value})}
+                                                    className="w-full px-3 py-1.5 bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-700 rounded-md"
+                                                    placeholder="טלפון"
+                                                    dir="ltr"
+                                                />
+                                                <input
+                                                    type="email"
+                                                    value={editFormData.email || ''}
+                                                    onChange={(e) => setEditFormData({...editFormData, email: e.target.value})}
+                                                    className="w-full px-3 py-1.5 bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-700 rounded-md"
+                                                    placeholder="אימייל"
+                                                    dir="ltr"
+                                                />
+                                                <input
+                                                    type="text"
+                                                    value={editFormData.address || ''}
+                                                    onChange={(e) => setEditFormData({...editFormData, address: e.target.value})}
+                                                    className="w-full px-3 py-1.5 bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-700 rounded-md md:col-span-2"
+                                                    placeholder="כתובת"
+                                                />
+                                            </div>
+                                            <div className="flex justify-end gap-2 mt-1">
+                                                <button
+                                                    onClick={() => setEditingClientId(null)}
+                                                    className="px-3 py-1.5 text-slate-600 dark:text-zinc-400 hover:bg-slate-100 dark:hover:bg-zinc-800 rounded-md text-sm transition-colors"
+                                                >
+                                                    ביטול
+                                                </button>
+                                                <button
+                                                    onClick={handleSaveEdit}
+                                                    disabled={isSavingEdit || !editFormData.name?.trim()}
+                                                    className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white rounded-md text-sm font-medium transition-colors flex items-center gap-1.5"
+                                                >
+                                                    {isSavingEdit ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
+                                                    שמור
+                                                </button>
+                                            </div>
                                         </div>
-                                        
-                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-1 mt-2 text-sm text-slate-600 dark:text-zinc-400">
-                                            {client.contactPerson && (
-                                                <div><span className="font-medium text-slate-700 dark:text-zinc-300">איש קשר:</span> {client.contactPerson}</div>
-                                            )}
-                                            {client.phone && (
-                                                <div><span className="font-medium text-slate-700 dark:text-zinc-300">טלפון:</span> <span dir="ltr">{client.phone}</span></div>
-                                            )}
-                                            {client.email && (
-                                                <div><span className="font-medium text-slate-700 dark:text-zinc-300">אימייל:</span> <span dir="ltr">{client.email}</span></div>
-                                            )}
-                                            {client.address && (
-                                                <div className="md:col-span-2"><span className="font-medium text-slate-700 dark:text-zinc-300">כתובת:</span> {client.address}</div>
-                                            )}
+                                    ) : (
+                                        <div className="flex flex-col flex-1">
+                                            <div className="flex flex-col md:flex-row md:items-center gap-2 md:gap-4 mb-1">
+                                                <span className="font-semibold text-lg text-slate-900 dark:text-zinc-100">{client.name}</span>
+                                                {client.createdAt && (
+                                                    <span className="text-xs text-slate-400 dark:text-zinc-500 hidden md:inline-block">
+                                                        נוסף ב- {new Date(client.createdAt).toLocaleDateString('he-IL', { timeZone: 'Asia/Jerusalem' })}
+                                                    </span>
+                                                )}
+                                            </div>
+                                            
+                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-1 mt-2 text-sm text-slate-600 dark:text-zinc-400">
+                                                {client.contactPerson && (
+                                                    <div><span className="font-medium text-slate-700 dark:text-zinc-300">איש קשר:</span> {client.contactPerson}</div>
+                                                )}
+                                                {client.phone && (
+                                                    <div><span className="font-medium text-slate-700 dark:text-zinc-300">טלפון:</span> <span dir="ltr">{client.phone}</span></div>
+                                                )}
+                                                {client.email && (
+                                                    <div><span className="font-medium text-slate-700 dark:text-zinc-300">אימייל:</span> <span dir="ltr">{client.email}</span></div>
+                                                )}
+                                                {client.address && (
+                                                    <div className="md:col-span-2"><span className="font-medium text-slate-700 dark:text-zinc-300">כתובת:</span> {client.address}</div>
+                                                )}
+                                            </div>
                                         </div>
-                                    </div>
-                                    <div className="flex items-center ml-4 mt-1">
+                                    )}
+
+                                    <div className="flex items-center ml-4 mt-1 gap-1">
+                                        {editingClientId !== client.id && (
+                                            <button
+                                                onClick={() => {
+                                                    setEditingClientId(client.id);
+                                                    setEditFormData({...client});
+                                                }}
+                                                className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-500/10 rounded-lg transition-colors opacity-0 group-hover:opacity-100 focus:opacity-100"
+                                                title="Edit client"
+                                            >
+                                                <Edit2 className="w-4 h-4" />
+                                            </button>
+                                        )}
                                         <button
                                             onClick={() => handleDelete(client.id, client.name)}
                                             disabled={deletingId === client.id}

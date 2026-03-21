@@ -18,6 +18,8 @@ interface TasksPanelProps {
         title: string;
         clientName: string;
         tags: string[];
+        visibilityScope?: 'global' | 'department';
+        departmentIds?: string[];
     };
 }
 
@@ -25,7 +27,7 @@ export default function TasksPanel({ isOpen, onClose, draftId, content, metadata
     const { t, language } = useTranslation();
     
     const [savedTasks, setSavedTasks] = useState<Task[]>([]);
-    const [extractedTasks, setExtractedTasks] = useState<Partial<Task>[]>([]);
+    const [extractedTasks, setExtractedTasks] = useState<Partial<Task & { assigneeId?: string | null }>[]>([]);
     const [isExtracting, setIsExtracting] = useState(false);
     const [isSaving, setIsSaving] = useState(false);
     const [error, setError] = useState('');
@@ -136,6 +138,8 @@ export default function TasksPanel({ isOpen, onClose, draftId, content, metadata
                     status: 'pending',
                     createdAt: new Date(),
                     updatedAt: new Date(),
+                    visibilityScope: metadata.visibilityScope || 'global',
+                    departmentIds: metadata.departmentIds || []
                 };
                 return addDoc(collection(db, 'tasks'), newTask);
             });
@@ -225,13 +229,18 @@ export default function TasksPanel({ isOpen, onClose, draftId, content, metadata
                             <div className="w-[160px]">
                                 <AssigneeSelector
                                     value={task.assignee || ''}
-                                    onChange={(newAssignee) => {
+                                    onChange={(newAssigneeObj) => {
                                         if (isPreview && idx !== undefined) {
                                             const newArr = [...extractedTasks];
-                                            newArr[idx].assignee = newAssignee;
+                                            newArr[idx].assignee = newAssigneeObj.displayName;
+                                            newArr[idx].assigneeId = newAssigneeObj.uid;
                                             setExtractedTasks(newArr);
                                         } else if (!isPreview && task.id) {
-                                            updateDoc(doc(db, 'tasks', task.id), { assignee: newAssignee, updatedAt: new Date() }).catch(console.error);
+                                            updateDoc(doc(db, 'tasks', task.id), { 
+                                                assignee: newAssigneeObj.displayName, 
+                                                assigneeId: newAssigneeObj.uid,
+                                                updatedAt: new Date() 
+                                            }).catch(console.error);
                                         }
                                     }}
                                     placeholder={t('tasks.filterAssignee') || 'אחראי...'}

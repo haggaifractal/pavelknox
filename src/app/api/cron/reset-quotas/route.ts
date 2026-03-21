@@ -10,7 +10,6 @@ export async function GET(request: Request) {
         }
 
         let updatedCount = 0;
-        let telegramCount = 0;
 
         // Reset Web Users
         const usersRef = adminDb.collection('users');
@@ -36,34 +35,11 @@ export async function GET(request: Request) {
             batches.push(currentBatch.commit());
         }
 
-        // Reset Telegram Admins
-        const telegramAdminsRef = adminDb.collection('telegram_admins');
-        const telegramSnapshot = await telegramAdminsRef.get();
-        
-        let telegramBatch = adminDb.batch();
-        let telegramOpCount = 0;
-
-        telegramSnapshot.docs.forEach((doc) => {
-            telegramBatch.update(doc.ref, { tokensUsedThisMonth: 0 });
-            telegramOpCount++;
-            
-            if (telegramOpCount === 400) {
-                batches.push(telegramBatch.commit());
-                telegramBatch = adminDb.batch();
-                telegramOpCount = 0;
-            }
-            telegramCount++;
-        });
-
-        if (telegramOpCount > 0) {
-            batches.push(telegramBatch.commit());
-        }
-
         await Promise.all(batches);
 
         return NextResponse.json({ 
             success: true, 
-            message: `Reset quotas for ${updatedCount} web users and ${telegramCount} telegram admins.` 
+            message: `Reset quotas for ${updatedCount} web users.` 
         });
     } catch (error: any) {
         console.error('Failed to reset quotas:', error);

@@ -72,6 +72,12 @@ export async function POST(req: Request) {
     }
 
     debugStep = 'azure_init';
+    
+    // Prevent "baseURL and endpoint are mutually exclusive" error
+    // from global OS environment variables bubbling into the Node process
+    delete process.env.AZURE_OPENAI_BASE_URL;
+    delete process.env.OPENAI_BASE_URL;
+
     const ai = new AzureOpenAI({
       apiKey: process.env.AZURE_OPENAI_API_KEY || '',
       endpoint: process.env.AZURE_OPENAI_ENDPOINT || '',

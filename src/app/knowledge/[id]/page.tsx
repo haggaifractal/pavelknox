@@ -21,7 +21,7 @@ export default function KnowledgeViewPage({ params }: KnowledgeViewProps) {
     const docId = resolvedParams.id;
     const router = useRouter();
     const { t } = useTranslation();
-    const { user, isAdmin } = useAuth();
+    const { user, isAdmin, permissions } = useAuth();
 
     const [document, setDocument] = useState<any>(null);
     const [loading, setLoading] = useState(true);
@@ -38,6 +38,8 @@ export default function KnowledgeViewPage({ params }: KnowledgeViewProps) {
                 content: document.content || '',
                 clientName: document.clientName || '',
                 tags: document.tags || [],
+                visibilityScope: document.visibilityScope || 'global',
+                departmentIds: document.departmentIds || [],
                 createdAt: new Date(),
                 updatedAt: new Date(),
                 status: 'pending',
@@ -202,24 +204,26 @@ export default function KnowledgeViewPage({ params }: KnowledgeViewProps) {
                                     {document.title || t('knowledgeBase.untitled')}
                                 </h1>
                                 
-                                <div className="flex items-center gap-3 shrink-0 mt-2 sm:mt-0">
-                                    <button 
-                                        onClick={handleEdit}
-                                        disabled={isEditing || isDeleting}
-                                        className="flex items-center gap-2 px-4 py-2.5 bg-white dark:bg-zinc-800 border border-slate-200 dark:border-zinc-700 hover:bg-slate-50 dark:hover:bg-zinc-700 text-slate-700 dark:text-zinc-300 rounded-xl transition-all font-medium text-sm shadow-sm hover:shadow disabled:opacity-50"
-                                    >
-                                        {isEditing ? <Loader2 className="w-4 h-4 animate-spin text-slate-400" /> : <Edit2 className="w-4 h-4 text-indigo-500" />}
-                                        {t('knowledgeBase.btnEdit') || 'ערוך מידע'}
-                                    </button>
-                                    <button 
-                                        onClick={handleDelete}
-                                        disabled={isEditing || isDeleting}
-                                        className="flex items-center gap-2 px-4 py-2.5 bg-white dark:bg-zinc-800 border border-slate-200 dark:border-zinc-700 hover:bg-red-50 dark:hover:bg-red-500/10 hover:border-red-200 dark:hover:border-red-500/30 text-slate-700 hover:text-red-600 dark:text-zinc-300 dark:hover:text-red-400 rounded-xl transition-all font-medium text-sm shadow-sm hover:shadow disabled:opacity-50"
-                                    >
-                                        {isDeleting ? <Loader2 className="w-4 h-4 animate-spin text-slate-400" /> : <Trash2 className="w-4 h-4 text-slate-400 group-hover:text-red-500" />}
-                                        {t('knowledgeBase.btnDelete') || 'מחק מאגר'}
-                                    </button>
-                                </div>
+                                {isAdmin && (
+                                    <div className="flex items-center gap-3 shrink-0 mt-2 sm:mt-0">
+                                        <button 
+                                            onClick={handleEdit}
+                                            disabled={isEditing || isDeleting}
+                                            className="flex items-center gap-2 px-4 py-2.5 bg-white dark:bg-zinc-800 border border-slate-200 dark:border-zinc-700 hover:bg-slate-50 dark:hover:bg-zinc-700 text-slate-700 dark:text-zinc-300 rounded-xl transition-all font-medium text-sm shadow-sm hover:shadow disabled:opacity-50"
+                                        >
+                                            {isEditing ? <Loader2 className="w-4 h-4 animate-spin text-slate-400" /> : <Edit2 className="w-4 h-4 text-indigo-500" />}
+                                            {t('knowledgeBase.btnEdit') || 'ערוך מידע'}
+                                        </button>
+                                        <button 
+                                            onClick={handleDelete}
+                                            disabled={isEditing || isDeleting}
+                                            className="flex items-center gap-2 px-4 py-2.5 bg-white dark:bg-zinc-800 border border-slate-200 dark:border-zinc-700 hover:bg-red-50 dark:hover:bg-red-500/10 hover:border-red-200 dark:hover:border-red-500/30 text-slate-700 hover:text-red-600 dark:text-zinc-300 dark:hover:text-red-400 rounded-xl transition-all font-medium text-sm shadow-sm hover:shadow disabled:opacity-50"
+                                        >
+                                            {isDeleting ? <Loader2 className="w-4 h-4 animate-spin text-slate-400" /> : <Trash2 className="w-4 h-4 text-slate-400 group-hover:text-red-500" />}
+                                            {t('knowledgeBase.btnDelete') || 'מחק מאגר'}
+                                        </button>
+                                    </div>
+                                )}
                             </div>
                         </div>
 

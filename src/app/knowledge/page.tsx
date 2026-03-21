@@ -14,7 +14,7 @@ import { ThemeToggle } from '@/components/ThemeToggle';
 import { useTranslation } from '@/lib/contexts/LanguageContext';
 
 export default function KnowledgeBasePage() {
-    const { user } = useAuth();
+    const { user, isAdmin } = useAuth();
     const router = useRouter();
     const [documents, setDocuments] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
@@ -38,8 +38,16 @@ export default function KnowledgeBasePage() {
 
         const unsubscribe = onSnapshot(q, (snapshot) => {
             const results: any[] = [];
+            const userDeptIds = (user as any)?.departmentIds || [];
             snapshot.forEach((doc) => {
-                results.push({ id: doc.id, ...doc.data() });
+                const data = doc.data();
+                const isGlobal = !data.visibilityScope || data.visibilityScope === 'global';
+                const hasIntersection = data.departmentIds?.some((id: string) => userDeptIds.includes(id));
+                const canView = isAdmin || isGlobal || hasIntersection;
+                
+                if (canView) {
+                    results.push({ id: doc.id, ...data });
+                }
             });
             setDocuments(results);
             setLoading(false);

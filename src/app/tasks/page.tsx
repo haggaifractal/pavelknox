@@ -2,20 +2,21 @@
 
 import AuthGuard from '@/components/ui/AuthGuard';
 import { useEffect, useState } from 'react';
-import { collection, query, orderBy, onSnapshot, doc, updateDoc, deleteDoc, where, QueryConstraint } from 'firebase/firestore';
+import { collection, query, orderBy, onSnapshot, doc, updateDoc, deleteDoc, where, QueryConstraint, addDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebase/client';
 import { useTranslation } from '@/lib/contexts/LanguageContext';
 import { Task } from '@/lib/types/task';
-import { CheckCircle2, Circle, Clock, User, Briefcase, Trash2, FileText, Edit2, X, Save } from 'lucide-react';
+import { CheckCircle2, Circle, Clock, User, Briefcase, Trash2, FileText, Edit2, X, Save, MessageSquare } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import Link from 'next/link';
 import AssigneeSelector from '@/components/ui/AssigneeSelector';
 import ClientSelector from '@/components/ui/ClientSelector';
+import TaskComments from '@/components/tasks/TaskComments';
 import { useAuth } from '@/lib/contexts/AuthContext';
 
 export default function TasksPage() {
     const { t, language } = useTranslation();
-    const { user } = useAuth();
+    const { user, permissions, isAdmin } = useAuth();
     
     // Formatting Dates
     const formatDate = (dateValue: any) => {
@@ -96,8 +97,18 @@ export default function TasksPage() {
 
         const unsubscribe = onSnapshot(q, (snapshot) => {
             const results: Task[] = [];
+            const userDeptIds = (user as any)?.departmentIds || [];
+            
             snapshot.forEach((d) => {
-                results.push({ id: d.id, ...d.data() } as Task);
+                const data = d.data();
+                const isGlobal = !data.visibilityScope || data.visibilityScope === 'global';
+                const hasIntersection = data.departmentIds?.some((id: string) => userDeptIds.includes(id));
+                const isAssignee = data.assigneeId === user?.uid;
+                const canView = isAdmin || isGlobal || hasIntersection || isAssignee;
+
+                if (canView) {
+                    results.push({ id: d.id, ...data } as Task);
+                }
             });
             setTasks(results);
             setLoading(false);
@@ -112,7 +123,18 @@ export default function TasksPage() {
         try {
             await updateDoc(doc(db, 'tasks', currentTask.id), {
                 status: newStatus,
+                statusUpdatedAt: new Date(),
                 updatedAt: new Date()
+            });
+            // Audit Log
+            await addDoc(collection(db, `tasks/${currentTask.id}/comments`), {
+                text: `Status changed to ${newStatus}`,
+                authorId: user?.uid,
+                authorName: user?.displayName || 'Unknown',
+                createdAt: new Date(),
+                type: 'status_change',
+                oldStatus: currentTask.status,
+                newStatus: newStatus
             });
         } catch (error) {
             console.error('Failed to update task status:', error);
@@ -147,6 +169,7 @@ export default function TasksPage() {
             description: task.description,
             clientName: task.clientName || '',
             assignee: task.assignee || '',
+            assigneeId: task.assigneeId || null,
             deadline: task.deadline || null,
             createdAt: task.createdAt,
             status: task.status
@@ -160,6 +183,7 @@ export default function TasksPage() {
                 description: editForm.description,
                 clientName: editForm.clientName,
                 assignee: editForm.assignee,
+                assigneeId: editForm.assigneeId || null,
                 deadline: editForm.deadline,
                 status: editForm.status,
                 updatedAt: new Date()
@@ -243,7 +267,7 @@ export default function TasksPage() {
                             </label>
                             <AssigneeSelector 
                                 value={assigneeFilter}
-                                onChange={(val) => setAssigneeFilter(val === assigneeFilter ? '' : val)}
+                                onChange={(valObj) => setAssigneeFilter(valObj.displayName === assigneeFilter ? '' : valObj.displayName)}
                                 placeholder="הקלד שם אחראי לסינון..."
                                 className="bg-slate-50 dark:bg-zinc-950"
                             />
@@ -313,6 +337,10 @@ export default function TasksPage() {
                                         deadlineClasses = 'bg-rose-50 text-rose-700 dark:bg-rose-500/10 dark:text-rose-400 border border-rose-100 dark:border-rose-500/20 font-bold';
                                     }
 
+                                    const isAssignee = taskItem.assigneeId === user?.uid;
+                                    const canToggleStatus = true;
+                                    const canEditFullTask = true;
+
                                     if (isEditing) {
                                         return (
                                             <motion.div 
@@ -330,7 +358,8 @@ export default function TasksPage() {
                                                 <textarea 
                                                     value={editForm.description || ''}
                                                     onChange={e => setEditForm({...editForm, description: e.target.value})}
-                                                    className="w-full bg-slate-50 dark:bg-zinc-950 border border-slate-200 dark:border-zinc-800 rounded-xl p-3 text-sm focus:ring-2 focus:ring-indigo-500 resize-none min-h-[80px] outline-none"
+                                                    disabled={!canEditFullTask}
+                                                    className={`w-full bg-slate-50 dark:bg-zinc-950 border border-slate-200 dark:border-zinc-800 rounded-xl p-3 text-sm focus:ring-2 focus:ring-indigo-500 resize-none min-h-[80px] outline-none ${!canEditFullTask ? 'opacity-70 cursor-not-allowed' : ''}`}
                                                     placeholder="תיאור המשימה..."
                                                 />
 
@@ -341,7 +370,8 @@ export default function TasksPage() {
                                                             type="datetime-local"
                                                             value={toDatetimeLocal(editForm.deadline)}
                                                             onChange={e => setEditForm({...editForm, deadline: e.target.value})}
-                                                            className="w-full bg-slate-50 dark:bg-zinc-950 border border-slate-200 dark:border-zinc-800 rounded-lg p-2 text-[13px] outline-none focus:ring-2 focus:ring-indigo-500"
+                                                            disabled={!canEditFullTask}
+                                                            className={`w-full bg-slate-50 dark:bg-zinc-950 border border-slate-200 dark:border-zinc-800 rounded-lg p-2 text-[13px] outline-none focus:ring-2 focus:ring-indigo-500 ${!canEditFullTask ? 'opacity-70 cursor-not-allowed' : ''}`}
                                                         />
                                                     </div>
                                                     <div>
@@ -350,7 +380,8 @@ export default function TasksPage() {
                                                             type="datetime-local"
                                                             value={toDatetimeLocal(editForm.createdAt)}
                                                             onChange={e => setEditForm({...editForm, createdAt: e.target.value})}
-                                                            className="w-full bg-slate-50 dark:bg-zinc-950 border border-slate-200 dark:border-zinc-800 rounded-lg p-2 text-[13px] outline-none focus:ring-2 focus:ring-indigo-500"
+                                                            disabled={!canEditFullTask}
+                                                            className={`w-full bg-slate-50 dark:bg-zinc-950 border border-slate-200 dark:border-zinc-800 rounded-lg p-2 text-[13px] outline-none focus:ring-2 focus:ring-indigo-500 ${!canEditFullTask ? 'opacity-70 cursor-not-allowed' : ''}`}
                                                         />
                                                     </div>
                                                 </div>
@@ -360,8 +391,9 @@ export default function TasksPage() {
                                                         <label className="text-xs font-semibold text-slate-500 mb-1 block">אחראי</label>
                                                         <AssigneeSelector 
                                                             value={editForm.assignee}
-                                                            onChange={v => setEditForm({...editForm, assignee: v})}
-                                                            className="bg-slate-50 dark:bg-zinc-950 text-sm"
+                                                            onChange={vObj => setEditForm({...editForm, assignee: vObj.displayName, assigneeId: vObj.uid})}
+                                                            readOnly={!canEditFullTask}
+                                                            className={`bg-slate-50 dark:bg-zinc-950 text-sm ${!canEditFullTask ? 'opacity-70 cursor-not-allowed' : ''}`}
                                                         />
                                                     </div>
                                                     <div>
@@ -375,6 +407,16 @@ export default function TasksPage() {
                                                             <option value="in_progress">בטיפול</option>
                                                             <option value="completed">הושלם</option>
                                                         </select>
+                                                    </div>
+                                                </div>
+
+                                                <div className="mt-4 pt-4 border-t border-slate-100 dark:border-zinc-800">
+                                                    <h4 className="text-sm font-semibold text-slate-700 dark:text-zinc-300 mb-3 flex items-center gap-2">
+                                                        <MessageSquare className="w-4 h-4" />
+                                                        פעילות והערות
+                                                    </h4>
+                                                    <div className="h-[250px]">
+                                                        <TaskComments taskId={taskItem.id!} />
                                                     </div>
                                                 </div>
 
@@ -400,29 +442,33 @@ export default function TasksPage() {
                                             className={cardClasses}
                                         >
                                             <div className="absolute top-4 ltr:right-4 rtl:left-4 flex items-center opacity-0 group-hover:opacity-100 transition-opacity gap-1">
-                                                <button 
-                                                    onClick={() => handleStartEdit(taskItem)}
-                                                    className="p-1.5 text-indigo-400 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-500/10 rounded-lg transition-colors outline-none"
-                                                    title="ערוך משימה"
-                                                >
-                                                    <Edit2 className="w-4 h-4" />
-                                                </button>
-                                                <button 
-                                                    onClick={() => handleDeleteTask(taskItem.id!)}
-                                                    className="p-1.5 text-rose-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-500/10 rounded-lg transition-colors outline-none"
-                                                    title="מחק משימה"
-                                                >
-                                                    <Trash2 className="w-4 h-4" />
-                                                </button>
+                                                {(canEditFullTask || isAssignee) && (
+                                                    <button 
+                                                        onClick={() => handleStartEdit(taskItem)}
+                                                        className="p-1.5 text-indigo-400 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-500/10 rounded-lg transition-colors outline-none"
+                                                        title={canEditFullTask ? "ערוך משימה" : "צפה בפרטי משימה והערות"}
+                                                    >
+                                                        <Edit2 className="w-4 h-4" />
+                                                    </button>
+                                                )}
+                                                {isAdmin && (
+                                                    <button 
+                                                        onClick={() => handleDeleteTask(taskItem.id!)}
+                                                        className="p-1.5 text-rose-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-500/10 rounded-lg transition-colors outline-none"
+                                                        title="מחק משימה"
+                                                    >
+                                                        <Trash2 className="w-4 h-4" />
+                                                    </button>
+                                                )}
                                             </div>
 
                                             <div className="flex items-start gap-3.5 mb-4 ltr:pr-20 rtl:pl-20">
                                                 <button 
-                                                    onClick={() => handleToggleStatus(taskItem)}
-                                                    className="mt-0.5 flex-shrink-0 text-slate-300 hover:text-emerald-500 dark:text-zinc-600 dark:hover:text-emerald-400 transition-colors outline-none"
+                                                    onClick={() => canToggleStatus && handleToggleStatus(taskItem)}
+                                                    className={`mt-0.5 flex-shrink-0 transition-colors outline-none ${canToggleStatus ? 'text-slate-300 hover:text-emerald-500 dark:text-zinc-600 dark:hover:text-emerald-400 cursor-pointer' : 'text-slate-200 dark:text-zinc-700 cursor-default'}`}
                                                 >
                                                     {isCompleted ? (
-                                                        <CheckCircle2 className="w-[22px] h-[22px] text-emerald-500 drop-shadow-sm" />
+                                                        <CheckCircle2 className={`w-[22px] h-[22px] ${canToggleStatus ? 'text-emerald-500 drop-shadow-sm' : 'text-slate-300 dark:text-zinc-600'}`} />
                                                     ) : (
                                                         <Circle className="w-[22px] h-[22px]" />
                                                     )}

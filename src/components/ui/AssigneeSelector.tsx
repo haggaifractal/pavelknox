@@ -8,7 +8,7 @@ import { useAuth } from '@/lib/contexts/AuthContext';
 
 interface AssigneeSelectorProps {
     value?: string | null;
-    onChange: (assignee: string) => void;
+    onChange: (assignee: { displayName: string, uid: string | null }) => void;
     placeholder?: string;
     readOnly?: boolean;
     className?: string;
@@ -82,7 +82,7 @@ export default function AssigneeSelector({ value, onChange, placeholder = 'Selec
             } else {
                 setUsers(prev => prev.filter(user => user.uid !== u.uid));
                 if (value === u.displayName) {
-                    onChange('');
+                    onChange({ displayName: '', uid: null });
                 }
                 alert(`האחראי "${u.displayName}" נמחק בהצלחה.`);
             }
@@ -95,15 +95,15 @@ export default function AssigneeSelector({ value, onChange, placeholder = 'Selec
     const filteredUsers = users.filter(u => u.displayName.toLowerCase().includes(search.toLowerCase()));
     const exactMatch = users.find(u => u.displayName.toLowerCase() === search.trim().toLowerCase());
 
-    const handleSelect = (assigneeName: string) => {
-        onChange(assigneeName);
+    const handleSelect = (assigneeName: string, uid: string | null) => {
+        onChange({ displayName: assigneeName, uid });
         setSearch(assigneeName);
         setOpen(false);
     };
 
     const handleAddNew = () => {
         if (!search.trim()) return;
-        handleSelect(search.trim());
+        handleSelect(search.trim(), null);
     };
 
     return (
@@ -156,7 +156,7 @@ export default function AssigneeSelector({ value, onChange, placeholder = 'Selec
                             return (
                                 <div key={u.uid} className="w-full flex items-center justify-between px-3 py-2 hover:bg-slate-50 dark:hover:bg-zinc-800 rounded-lg transition-colors group">
                                     <button
-                                        onClick={() => handleSelect(u.displayName)}
+                                        onClick={() => handleSelect(u.displayName, u.uid)}
                                         className="flex-1 flex items-center text-left"
                                     >
                                         <span className="font-medium text-slate-700 dark:text-zinc-300">{u.displayName}</span>

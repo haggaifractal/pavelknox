@@ -2,6 +2,9 @@ import { NextResponse } from 'next/server';
 import { verifyAdmin } from '@/lib/firebase/serverAuth';
 import { AzureOpenAI } from 'openai';
 
+delete process.env.AZURE_OPENAI_BASE_URL;
+delete process.env.OPENAI_BASE_URL;
+
 const client = new AzureOpenAI({
     apiKey: process.env.AZURE_OPENAI_API_KEY || 'dummy_key_for_build',
     endpoint: process.env.AZURE_OPENAI_ENDPOINT || 'https://dummy.openai.azure.com',
