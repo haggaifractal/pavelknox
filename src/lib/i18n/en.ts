@@ -3,6 +3,9 @@ import { he } from './he';
 export const en: typeof he = {
   common: {
     navTasks: 'Tasks',
+    navClients: 'Clients',
+    navTags: 'Tags',
+    navAdminData: 'Admin Data',
     loading: 'Loading...',
     error: 'Error',
     success: 'Success',

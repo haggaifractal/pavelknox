@@ -129,9 +129,13 @@ export default function DraftEditorPage({ params }: EditorPageProps) {
             if (draft?.sourceKnowledgeId) {
                 try {
                     console.log('Cleaning up old knowledge base item:', draft.sourceKnowledgeId);
+                    const token = await user?.getIdToken(true);
                     await fetch('/api/knowledge/delete', {
                         method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
+                        headers: { 
+                            'Content-Type': 'application/json',
+                            'Authorization': `Bearer ${token}` 
+                        },
                         body: JSON.stringify({ id: draft.sourceKnowledgeId })
                     });
                 } catch(e) {
@@ -150,7 +154,7 @@ export default function DraftEditorPage({ params }: EditorPageProps) {
 
             // Auto-ingest into RAG Vector DB
             try {
-                const token = await user?.getIdToken();
+                const token = await user?.getIdToken(true);
                 const ingestRes = await fetch('/api/knowledge/ingest', {
                     method: 'POST',
                     headers: { 

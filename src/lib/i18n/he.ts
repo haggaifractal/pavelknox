@@ -1,6 +1,9 @@
 export const he = {
   common: {
     navTasks: 'משימות',
+    navClients: 'לקוחות',
+    navTags: 'תגיות',
+    navAdminData: 'ניהול נתונים',
     loading: 'טוען...',
     error: 'שגיאה',
     success: 'הצלחה',

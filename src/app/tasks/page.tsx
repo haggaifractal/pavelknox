@@ -11,9 +11,11 @@ import { motion, AnimatePresence } from 'framer-motion';
 import Link from 'next/link';
 import AssigneeSelector from '@/components/ui/AssigneeSelector';
 import ClientSelector from '@/components/ui/ClientSelector';
+import { useAuth } from '@/lib/contexts/AuthContext';
 
 export default function TasksPage() {
     const { t, language } = useTranslation();
+    const { user } = useAuth();
     
     const formatDate = (dateString: string) => {
         try {
@@ -76,14 +78,25 @@ export default function TasksPage() {
         }
     };
 
-    const handleDelete = async (id: string | undefined) => {
-        if (!id) return;
-        if (confirm(typeof window !== 'undefined' ? (t('common.delete') || 'Are you sure?') : 'Are you sure?')) {
-            try {
-                await deleteDoc(doc(db, 'tasks', id));
-            } catch (error) {
-                console.error('Failed to delete task:', error);
+    const handleDeleteTask = async (taskId: string) => {
+        if (!confirm('האם אתה בטוח שברצונך למחוק משימה זו?')) return;
+        try {
+            const token = await user?.getIdToken(true);
+            const res = await fetch('/api/tasks/delete', {
+                method: 'POST',
+                headers: { 
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify({ id: taskId }),
+            });
+            if (!res.ok) {
+                const data = await res.json();
+                throw new Error(data.error || 'Failed to delete task');
             }
+        } catch (error) {
+            console.error("Failed to delete task", error);
+            alert("שגיאה במחיקת המשימה");
         }
     };
 
@@ -229,7 +242,7 @@ export default function TasksPage() {
                                                                 )}
                                                             </div>
                                                             <button 
-                                                                onClick={() => handleDelete(taskItem.id)}
+                                                                onClick={() => handleDeleteTask(taskItem.id)}
                                                                 className="p-1.5 text-slate-300 hover:text-red-500 dark:text-zinc-600 dark:hover:text-red-400 rounded-md hover:bg-red-50 dark:hover:bg-red-500/10 transition-colors"
                                                                 title={t('common.delete') || 'מחק'}
                                                             >

@@ -10,7 +10,7 @@ import { signOut } from 'firebase/auth';
 import { useRouter } from 'next/navigation';
 
 export function AppHeader() {
-    const { user } = useAuth();
+    const { user, isAdmin, isSuperAdmin } = useAuth();
     const { t } = useTranslation();
     const router = useRouter();
 
@@ -45,7 +45,31 @@ export function AppHeader() {
 
                     <div className="flex items-center gap-4">
                         {user && (
-                            <div className="flex items-center gap-4 mr-2 rtl:ml-2">
+                            <div className="flex items-center gap-2 sm:gap-4 mr-2 rtl:ml-2">
+                                {(isAdmin || isSuperAdmin) && (
+                                    <>
+                                        <button
+                                            onClick={() => router.push('/clients')}
+                                            className="text-[14px] font-medium text-slate-700 dark:text-zinc-300 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors px-2 py-1.5"
+                                        >
+                                            {t('common.navClients') || 'לקוחות'}
+                                        </button>
+                                        <button
+                                            onClick={() => router.push('/tags')}
+                                            className="text-[14px] font-medium text-slate-700 dark:text-zinc-300 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors px-2 py-1.5"
+                                        >
+                                            {t('common.navTags') || 'תגיות'}
+                                        </button>
+                                    </>
+                                )}
+                                {isSuperAdmin && (
+                                    <button
+                                        onClick={() => router.push('/admin/data')}
+                                        className="text-[14px] font-medium text-rose-600 dark:text-rose-400 hover:text-rose-700 dark:hover:text-rose-300 transition-colors px-2 py-1.5"
+                                    >
+                                        {t('common.navAdminData') || 'Admin Data'}
+                                    </button>
+                                )}
                                 <button
                                     onClick={() => router.push('/tasks')}
                                     className="text-[14px] font-medium text-slate-700 dark:text-zinc-300 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors bg-slate-100/50 dark:bg-zinc-800/30 px-3 py-1.5 rounded-lg border border-transparent hover:border-indigo-100 dark:hover:border-indigo-500/20"

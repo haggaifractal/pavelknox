@@ -159,7 +159,16 @@ export default function Dashboard() {
     const handleDelete = async (draftId: string) => {
         if (!confirm(t('dashboard.confirmDelete'))) return;
         try {
-            await deleteDoc(doc(db, 'drafts', draftId));
+            const token = await user?.getIdToken();
+            const res = await fetch('/api/drafts/delete', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify({ id: draftId })
+            });
+            if (!res.ok) throw new Error('Failed to delete draft');
             refresh();
         } catch (error) {
             console.error('Failed to delete draft', error);
@@ -216,8 +225,13 @@ export default function Dashboard() {
                     })
                 });
 
-                // 4. Delete the Draft
-                await deleteDoc(doc(db, 'drafts', id));
+                // 4. Delete the Draft (Securely)
+                const deleteRes = await fetch('/api/drafts/delete', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                    body: JSON.stringify({ id })
+                });
+                if (!deleteRes.ok) throw new Error('Failed to securely delete draft during approval');
                 refresh();
                 return;
             } catch (err) {

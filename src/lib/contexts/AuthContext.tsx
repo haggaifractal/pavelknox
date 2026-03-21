@@ -35,11 +35,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                 try {
                     // Force refresh to ensure we have the latest custom claims
                     const tokenResult = await user.getIdTokenResult(true);
-                    const userRole = (tokenResult.claims.role as UserRole) || (user.email === 'chagai33@gmail.com' ? 'superadmin' : 'viewer');
+                    const userRole = (tokenResult.claims.role as UserRole) || 'viewer';
                     setRole(userRole);
                 } catch (error) {
                     console.error("Failed to get token claims:", error);
-                    setRole(user.email === 'chagai33@gmail.com' ? 'superadmin' : 'viewer');
+                    setRole('viewer');
                 }
             } else {
                 setRole(null);

@@ -9,6 +9,7 @@ import { ArrowLeft, Database, Calendar, FileCheck2, User, ChevronRight, Edit2, T
 import { motion } from 'framer-motion';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import { useTranslation } from '@/lib/contexts/LanguageContext';
+import { useAuth } from '@/lib/contexts/AuthContext';
 import { parseMarkdown } from '@/lib/utils';
 
 interface KnowledgeViewProps {
@@ -20,6 +21,7 @@ export default function KnowledgeViewPage({ params }: KnowledgeViewProps) {
     const docId = resolvedParams.id;
     const router = useRouter();
     const { t } = useTranslation();
+    const { user, isAdmin } = useAuth();
 
     const [document, setDocument] = useState<any>(null);
     const [loading, setLoading] = useState(true);
@@ -57,9 +59,13 @@ export default function KnowledgeViewPage({ params }: KnowledgeViewProps) {
         }
         setIsDeleting(true);
         try {
+            const token = await user?.getIdToken(true);
             const res = await fetch('/api/knowledge/delete', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: { 
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
                 body: JSON.stringify({ id: document.id }),
             });
             if (res.ok) {

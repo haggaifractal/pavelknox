@@ -28,7 +28,7 @@ export async function verifySuperAdmin(request: Request | NextRequest) {
   const decodedToken = await verifyAuth(request);
   if (!decodedToken) return null;
   
-  if (decodedToken.role === 'superadmin' || decodedToken.email === 'chagai33@gmail.com' || decodedToken.email === 'pavelknox1@gmail.com') {
+  if (decodedToken.role === 'superadmin') {
     return decodedToken;
   }
   return null;
@@ -41,7 +41,7 @@ export async function verifyAdmin(request: Request | NextRequest) {
   const decodedToken = await verifyAuth(request);
   if (!decodedToken) return null;
   
-  if (decodedToken.role === 'admin' || decodedToken.role === 'superadmin' || decodedToken.email === 'chagai33@gmail.com' || decodedToken.email === 'pavelknox1@gmail.com') {
+  if (decodedToken.role === 'admin' || decodedToken.role === 'superadmin') {
     return decodedToken;
   }
   return null;

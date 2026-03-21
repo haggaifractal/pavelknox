@@ -69,6 +69,14 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Query is required' }, { status: 400 });
     }
 
+    // Fetch Entity Dictionary for RAG Context
+    const [usersSnap, clientsSnap] = await Promise.all([
+        adminDb.collection('users').get(),
+        adminDb.collection('clients').get()
+    ]);
+    const knownAssignees = usersSnap.docs.map(d => d.data().displayName || d.data().name).filter(Boolean).join(', ');
+    const knownClients = clientsSnap.docs.map(d => d.data().name).filter(Boolean).join(', ');
+
     // Prepare system prompt for tool calling
     const systemInstruction = {
         role: 'system',
@@ -76,6 +84,11 @@ export async function POST(req: Request) {
 Your primary goal is to answer the user's question accurately by using the provided tools.
 - Use 'search_knowledge_base' to answer questions about meetings, documents, context, or summaries.
 - Use 'get_open_tasks' ONLY when the user asks about tasks, action items, or things they need to do.
+
+SYSTEM CONTEXT (Entity Dictionary):
+- Known Assignees/Staff: ${knownAssignees || 'None yet'}
+- Known Clients: ${knownClients || 'None yet'}
+When a user asks about a partial name (e.g., "חגי"), use this dictionary to resolve it to the full name (e.g., "חגי יחיאל") BEFORE calling tools.
 
 CRITICAL RULES FOR FINAL ANSWER:
 1. STRICT KNOWLEDGE BINDING: If the answer is NOT strictly contained within the tool results, you MUST say "I don't know based on the provided data." DO NOT hallucinate.
@@ -127,16 +140,23 @@ CRITICAL RULES FOR FINAL ANSWER:
                 contextUsed += matchedDocs.length;
             } 
             else if (functionName === "get_open_tasks") {
-                let tasksRef: any = adminDb.collection("tasks").where('status', 'in', ['pending', 'in_progress']);
+                const tasksRef = adminDb.collection("tasks").where('status', 'in', ['pending', 'in_progress']);
+                const tasksSnapshot = await tasksRef.get();
+                let matchedTasks = tasksSnapshot.docs.map((d: any) => ({ id: d.id, ...d.data() }));
+
+                // Perform fuzzy matching in memory
                 if (functionArgs.clientName) {
-                    tasksRef = tasksRef.where('clientName', '==', functionArgs.clientName);
+                    const searchClient = functionArgs.clientName.toLowerCase();
+                    matchedTasks = matchedTasks.filter((t: any) => 
+                        t.clientName && t.clientName.toLowerCase().includes(searchClient)
+                    );
                 }
                 if (functionArgs.assignee) {
-                    tasksRef = tasksRef.where('assignee', '==', functionArgs.assignee);
+                    const searchAssignee = functionArgs.assignee.toLowerCase();
+                    matchedTasks = matchedTasks.filter((t: any) => 
+                        t.assignee && t.assignee.toLowerCase().includes(searchAssignee)
+                    );
                 }
-                
-                const tasksSnapshot = await tasksRef.get();
-                const matchedTasks = tasksSnapshot.docs.map((d: any) => ({ id: d.id, ...d.data() }));
                 
                 if (matchedTasks.length === 0) {
                     functionResult = "No open tasks found matching the criteria.";
