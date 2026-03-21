@@ -1,0 +1,139 @@
+[debug] [2026-03-21T19:00:06.792Z] ----------------------------------------------------------------------
+[debug] [2026-03-21T19:00:06.794Z] Command:       C:\Program Files\nodejs\node.exe C:\Users\Administrator\AppData\Roaming\npm\node_modules\firebase-tools\lib\bin\firebase.js deploy
+[debug] [2026-03-21T19:00:06.795Z] CLI Version:   15.11.0
+[debug] [2026-03-21T19:00:06.795Z] Platform:      win32
+[debug] [2026-03-21T19:00:06.795Z] Node Version:  v22.13.0
+[debug] [2026-03-21T19:00:06.795Z] Time:          Sat Mar 21 2026 21:00:06 GMT+0200 (Israel Standard Time)
+[debug] [2026-03-21T19:00:06.795Z] ----------------------------------------------------------------------
+[debug] 
+[debug] [2026-03-21T19:00:09.945Z] > command requires scopes: ["email","openid","https://www.googleapis.com/auth/cloudplatformprojects.readonly","https://www.googleapis.com/auth/firebase","https://www.googleapis.com/auth/cloud-platform"]
+[debug] [2026-03-21T19:00:09.946Z] > authorizing via signed-in user (chagai33@gmail.com)
+[debug] [2026-03-21T19:00:09.946Z] [iam] checking project pavelknox-b5781 for permissions ["datastore.indexes.create","datastore.indexes.delete","datastore.indexes.list","datastore.indexes.update","firebase.projects.get","firebasehosting.sites.update"]
+[debug] [2026-03-21T19:00:09.948Z] Checked if tokens are valid: false, expires at: 1774116378732
+[debug] [2026-03-21T19:00:09.948Z] Checked if tokens are valid: false, expires at: 1774116378732
+[debug] [2026-03-21T19:00:09.948Z] > refreshing access token with scopes: []
+[debug] [2026-03-21T19:00:09.950Z] >>> [apiv2][query] POST https://www.googleapis.com/oauth2/v3/token [none]
+[debug] [2026-03-21T19:00:09.950Z] >>> [apiv2][body] POST https://www.googleapis.com/oauth2/v3/token [omitted]
+[debug] [2026-03-21T19:00:10.196Z] <<< [apiv2][status] POST https://www.googleapis.com/oauth2/v3/token 200
+[debug] [2026-03-21T19:00:10.196Z] <<< [apiv2][body] POST https://www.googleapis.com/oauth2/v3/token [omitted]
+[debug] [2026-03-21T19:00:10.207Z] >>> [apiv2][query] POST https://cloudresourcemanager.googleapis.com/v1/projects/pavelknox-b5781:testIamPermissions [none]
+[debug] [2026-03-21T19:00:10.207Z] >>> [apiv2][(partial)header] POST https://cloudresourcemanager.googleapis.com/v1/projects/pavelknox-b5781:testIamPermissions  x-goog-user-project=pavelknox-b5781
+[debug] [2026-03-21T19:00:10.207Z] >>> [apiv2][body] POST https://cloudresourcemanager.googleapis.com/v1/projects/pavelknox-b5781:testIamPermissions {"permissions":["datastore.indexes.create","datastore.indexes.delete","datastore.indexes.list","datastore.indexes.update","firebase.projects.get","firebasehosting.sites.update"]}
+[debug] [2026-03-21T19:00:11.171Z] <<< [apiv2][status] POST https://cloudresourcemanager.googleapis.com/v1/projects/pavelknox-b5781:testIamPermissions 200
+[debug] [2026-03-21T19:00:11.171Z] <<< [apiv2][body] POST https://cloudresourcemanager.googleapis.com/v1/projects/pavelknox-b5781:testIamPermissions {"permissions":["datastore.indexes.create","datastore.indexes.delete","datastore.indexes.list","datastore.indexes.update","firebase.projects.get","firebasehosting.sites.update"]}
+[debug] [2026-03-21T19:00:11.171Z] Checked if tokens are valid: true, expires at: 1774123209196
+[debug] [2026-03-21T19:00:11.171Z] Checked if tokens are valid: true, expires at: 1774123209196
+[debug] [2026-03-21T19:00:11.172Z] >>> [apiv2][query] GET https://firebase.googleapis.com/v1beta1/projects/pavelknox-b5781 [none]
+[debug] [2026-03-21T19:00:11.539Z] <<< [apiv2][status] GET https://firebase.googleapis.com/v1beta1/projects/pavelknox-b5781 200
+[debug] [2026-03-21T19:00:11.539Z] <<< [apiv2][body] GET https://firebase.googleapis.com/v1beta1/projects/pavelknox-b5781 {"projectId":"pavelknox-b5781","projectNumber":"154430307674","displayName":"pavelknox","name":"projects/pavelknox-b5781","resources":{"hostingSite":"pavelknox-b5781"},"state":"ACTIVE","etag":"1_ed47a2de-7785-48eb-9a08-4014c3e5ccee"}
+[debug] [2026-03-21T19:00:14.395Z] defaultcredentials: writing to file C:\Users\Administrator\AppData\Roaming\firebase\chagai33_gmail_com_application_default_credentials.json
+[debug] [2026-03-21T19:00:14.397Z] Checked if tokens are valid: true, expires at: 1774123209196
+[debug] [2026-03-21T19:00:14.397Z] Checked if tokens are valid: true, expires at: 1774123209196
+[debug] [2026-03-21T19:00:14.397Z] >>> [apiv2][query] GET https://firebasehosting.googleapis.com/v1beta1/projects/pavelknox-b5781/sites pageToken=&pageSize=10
+[debug] [2026-03-21T19:00:15.736Z] <<< [apiv2][status] GET https://firebasehosting.googleapis.com/v1beta1/projects/pavelknox-b5781/sites 200
+[debug] [2026-03-21T19:00:15.737Z] <<< [apiv2][body] GET https://firebasehosting.googleapis.com/v1beta1/projects/pavelknox-b5781/sites {"sites":[{"name":"projects/pavelknox-b5781/sites/pavelknox-b5781","defaultUrl":"https://pavelknox-b5781.web.app","appId":"1:154430307674:web:e4659b2b9f9f914cdf4763","type":"DEFAULT_SITE"}]}
+[debug] [2026-03-21T19:00:15.737Z] Checked if tokens are valid: true, expires at: 1774123209196
+[debug] [2026-03-21T19:00:15.737Z] Checked if tokens are valid: true, expires at: 1774123209196
+[debug] [2026-03-21T19:00:15.738Z] >>> [apiv2][query] GET https://firebase.googleapis.com/v1beta1/projects/-/webApps/1:154430307674:web:e4659b2b9f9f914cdf4763/config [none]
+[debug] [2026-03-21T19:00:16.555Z] <<< [apiv2][status] GET https://firebase.googleapis.com/v1beta1/projects/-/webApps/1:154430307674:web:e4659b2b9f9f914cdf4763/config 200
+[debug] [2026-03-21T19:00:16.555Z] <<< [apiv2][body] GET https://firebase.googleapis.com/v1beta1/projects/-/webApps/1:154430307674:web:e4659b2b9f9f914cdf4763/config {"projectId":"pavelknox-b5781","appId":"1:154430307674:web:e4659b2b9f9f914cdf4763","storageBucket":"pavelknox-b5781.firebasestorage.app","apiKey":"AIzaSyDFdpLHG3C1ubj5cZPfghz5mTw4AQQNsug","authDomain":"pavelknox-b5781.firebaseapp.com","messagingSenderId":"154430307674","measurementId":"G-84JB9XF21H","projectNumber":"154430307674","version":"2"}
+[info] 
+   Thank you for trying our early preview of Next.js support on Firebase Hosting.
+   During the preview, support is best-effort and breaking changes can be expected. Proceed with caution.
+   The integration is known to work with Next.js version 12 - 15.0. You may encounter errors.
+
+   Documentation: https://firebase.google.com/docs/hosting/frameworks/nextjs
+   File a bug: https://github.com/firebase/firebase-tools/issues/new?template=bug_report.md
+   Submit a feature request: https://github.com/firebase/firebase-tools/issues/new?template=feature_request.md
+
+   We'd love to learn from you. Express your interest in helping us shape the future of Firebase Hosting: https://goo.gle/41enW5X
+
+[debug] [2026-03-21T19:00:20.882Z] Checked if tokens are valid: true, expires at: 1774123209196
+[debug] [2026-03-21T19:00:20.882Z] Checked if tokens are valid: true, expires at: 1774123209196
+[debug] [2026-03-21T19:00:20.882Z] >>> [apiv2][query] GET https://firebasehosting.googleapis.com/v1beta1/projects/pavelknox-b5781/sites/pavelknox-b5781 [none]
+[debug] [2026-03-21T19:00:21.984Z] <<< [apiv2][status] GET https://firebasehosting.googleapis.com/v1beta1/projects/pavelknox-b5781/sites/pavelknox-b5781 200
+[debug] [2026-03-21T19:00:21.984Z] <<< [apiv2][body] GET https://firebasehosting.googleapis.com/v1beta1/projects/pavelknox-b5781/sites/pavelknox-b5781 {"name":"projects/pavelknox-b5781/sites/pavelknox-b5781","defaultUrl":"https://pavelknox-b5781.web.app","appId":"1:154430307674:web:e4659b2b9f9f914cdf4763","type":"DEFAULT_SITE"}
+[info]    ▲ Next.js 15.1.9
+
+[info]    - Environments: .env.local
+   - Experiments (use with caution):
+     · reactCompiler
+
+
+[info]    Creating an optimized production build ...
+
+[info]  ✓ Compiled successfully
+
+[info]    Skipping linting
+
+[info]    Checking validity of types ...
+
+[info]    Collecting page data ...
+
+[info] (node:8444) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+
+[info] (node:21852) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+
+[info] (node:18788) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+
+[info] (node:4140) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+
+[info] (node:11540) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+
+[info] (node:29124) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+(node:29496) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+
+[info]    Generating static pages (0/36) ...
+
+[info] Error occurred prerendering page "/api/telegram-webhook". Read more: https://nextjs.org/docs/messages/prerender-error
+PageNotFoundError: Cannot find module for page: /api/telegram-webhook/route
+    at getPagePath (C:\Users\Administrator\Documents\pavelknox\node_modules\next\dist\server\require.js:88:15)
+    at requirePage (C:\Users\Administrator\Documents\pavelknox\node_modules\next\dist\server\require.js:93:22)
+    at loadComponentsImpl (C:\Users\Administrator\Documents\pavelknox\node_modules\next\dist\server\load-components.js:107:57)
+    at async exportPageImpl (C:\Users\Administrator\Documents\pavelknox\node_modules\next\dist\export\worker.js:164:24)
+    at async Span.traceAsyncFn (C:\Users\Administrator\Documents\pavelknox\node_modules\next\dist\trace\trace.js:153:20)
+    at async exportPage (C:\Users\Administrator\Documents\pavelknox\node_modules\next\dist\export\worker.js:335:18)
+    at async exportPageWithRetry (C:\Users\Administrator\Documents\pavelknox\node_modules\next\dist\export\worker.js:230:26)
+    at async Promise.all (index 0)
+    at async Object.exportPages (C:\Users\Administrator\Documents\pavelknox\node_modules\next\dist\export\worker.js:307:31)
+Export encountered an error on /api/telegram-webhook/route: /api/telegram-webhook, exiting the build.
+
+[info]  ⨯ Next.js build worker exited with code: 1 and signal: null
+
+[debug] [2026-03-21T19:00:59.340Z] Error: ENOENT: no such file or directory, open 'C:\Users\Administrator\Documents\pavelknox\.next\export-marker.json'
+[error] 
+[error] Error: An unexpected error has occurred.
+[debug] [2026-03-21T19:03:51.820Z] ----------------------------------------------------------------------
+[debug] [2026-03-21T19:03:51.822Z] Command:       C:\Program Files\nodejs\node.exe C:\Users\Administrator\AppData\Roaming\npm\node_modules\firebase-tools\lib\bin\firebase.js deploy
+[debug] [2026-03-21T19:03:51.822Z] CLI Version:   15.11.0
+[debug] [2026-03-21T19:03:51.822Z] Platform:      win32
+[debug] [2026-03-21T19:03:51.823Z] Node Version:  v22.13.0
+[debug] [2026-03-21T19:03:51.823Z] Time:          Sat Mar 21 2026 21:03:51 GMT+0200 (Israel Standard Time)
+[debug] [2026-03-21T19:03:51.823Z] ----------------------------------------------------------------------
+[debug] 
+[debug] [2026-03-21T19:03:53.246Z] > command requires scopes: ["email","openid","https://www.googleapis.com/auth/cloudplatformprojects.readonly","https://www.googleapis.com/auth/firebase","https://www.googleapis.com/auth/cloud-platform"]
+[debug] [2026-03-21T19:03:53.246Z] > authorizing via signed-in user (chagai33@gmail.com)
+[debug] [2026-03-21T19:03:53.246Z] [iam] checking project pavelknox-b5781 for permissions ["datastore.indexes.create","datastore.indexes.delete","datastore.indexes.list","datastore.indexes.update","firebase.projects.get","firebasehosting.sites.update"]
+[debug] [2026-03-21T19:03:53.247Z] Checked if tokens are valid: true, expires at: 1774123209196
+[debug] [2026-03-21T19:03:53.247Z] Checked if tokens are valid: true, expires at: 1774123209196
+[debug] [2026-03-21T19:03:53.248Z] >>> [apiv2][query] POST https://cloudresourcemanager.googleapis.com/v1/projects/pavelknox-b5781:testIamPermissions [none]
+[debug] [2026-03-21T19:03:53.248Z] >>> [apiv2][(partial)header] POST https://cloudresourcemanager.googleapis.com/v1/projects/pavelknox-b5781:testIamPermissions  x-goog-user-project=pavelknox-b5781
+[debug] [2026-03-21T19:03:53.248Z] >>> [apiv2][body] POST https://cloudresourcemanager.googleapis.com/v1/projects/pavelknox-b5781:testIamPermissions {"permissions":["datastore.indexes.create","datastore.indexes.delete","datastore.indexes.list","datastore.indexes.update","firebase.projects.get","firebasehosting.sites.update"]}
+[debug] [2026-03-21T19:03:54.417Z] <<< [apiv2][status] POST https://cloudresourcemanager.googleapis.com/v1/projects/pavelknox-b5781:testIamPermissions 200
+[debug] [2026-03-21T19:03:54.417Z] <<< [apiv2][body] POST https://cloudresourcemanager.googleapis.com/v1/projects/pavelknox-b5781:testIamPermissions {"permissions":["datastore.indexes.create","datastore.indexes.delete","datastore.indexes.list","datastore.indexes.update","firebase.projects.get","firebasehosting.sites.update"]}
+[debug] [2026-03-21T19:03:54.418Z] Checked if tokens are valid: true, expires at: 1774123209196
+[debug] [2026-03-21T19:03:54.418Z] Checked if tokens are valid: true, expires at: 1774123209196
+[debug] [2026-03-21T19:03:54.418Z] >>> [apiv2][query] GET https://firebase.googleapis.com/v1beta1/projects/pavelknox-b5781 [none]
+[debug] [2026-03-21T19:03:54.779Z] <<< [apiv2][status] GET https://firebase.googleapis.com/v1beta1/projects/pavelknox-b5781 200
+[debug] [2026-03-21T19:03:54.779Z] <<< [apiv2][body] GET https://firebase.googleapis.com/v1beta1/projects/pavelknox-b5781 {"projectId":"pavelknox-b5781","projectNumber":"154430307674","displayName":"pavelknox","name":"projects/pavelknox-b5781","resources":{"hostingSite":"pavelknox-b5781"},"state":"ACTIVE","etag":"1_ed47a2de-7785-48eb-9a08-4014c3e5ccee"}
+[debug] [2026-03-21T19:03:56.928Z] defaultcredentials: writing to file C:\Users\Administrator\AppData\Roaming\firebase\chagai33_gmail_com_application_default_credentials.json
+[debug] [2026-03-21T19:03:56.929Z] Checked if tokens are valid: true, expires at: 1774123209196
+[debug] [2026-03-21T19:03:56.929Z] Checked if tokens are valid: true, expires at: 1774123209196
+[debug] [2026-03-21T19:03:56.930Z] >>> [apiv2][query] GET https://firebasehosting.googleapis.com/v1beta1/projects/pavelknox-b5781/sites pageToken=&pageSize=10

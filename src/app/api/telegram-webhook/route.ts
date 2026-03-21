@@ -4,6 +4,8 @@ import { getFileUrl, downloadFileAsBuffer } from '@/services/telegram/client';
 import { transcribeAudio } from '@/services/ai/whisper';
 import { extractAndRedactKnowledge } from '@/services/ai/gpt';
 
+export const dynamic = 'force-dynamic';
+
 async function processIngestionAsync(docId: string, payload: any, uid: string) {
     try {
         console.log(`Starting background processing for doc: ${docId}`);
