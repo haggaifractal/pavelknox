@@ -2,12 +2,18 @@ import { NextResponse } from 'next/server';
 import { adminDb } from '@/lib/firebase/admin';
 import { FieldValue } from 'firebase-admin/firestore';
 import { generateEmbedding } from '@/lib/ai/embeddings';
+import { verifyAuth } from '@/lib/firebase/serverAuth';
 
 // We import the OpenAI SDK for LLM generation 
 import { OpenAI } from 'openai';
 
 export async function POST(req: Request) {
   try {
+    const auth = await verifyAuth(req);
+    if (!auth) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
     const endpoint = process.env.AZURE_OPENAI_ENDPOINT?.replace(/\/$/, '') || '';
     const deployment = process.env.AZURE_OPENAI_CHAT_DEPLOYMENT || 'gpt-4o';
     

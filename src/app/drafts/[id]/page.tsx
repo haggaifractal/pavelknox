@@ -148,9 +148,13 @@ export default function DraftEditorPage({ params }: EditorPageProps) {
 
             // Auto-ingest into RAG Vector DB
             try {
+                const token = await user?.getIdToken();
                 const ingestRes = await fetch('/api/knowledge/ingest', {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
+                    headers: { 
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
                     body: JSON.stringify({
                         title: title || 'Untitled Draft',
                         content: content,

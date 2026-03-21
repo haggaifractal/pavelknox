@@ -66,7 +66,7 @@ export default function LoginPage() {
     };
 
     return (
-        <div className="min-h-screen flex bg-slate-50 dark:bg-zinc-950 text-slate-900 dark:text-zinc-100 selection:bg-indigo-500/30 transition-colors duration-500">
+        <div className="flex-1 flex w-full h-full bg-slate-50 dark:bg-zinc-950 text-slate-900 dark:text-zinc-100 selection:bg-indigo-500/30 transition-colors duration-500">
             
             {/* Global Header handles Language and Theme */}
 

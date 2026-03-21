@@ -173,10 +173,15 @@ export default function Dashboard() {
             if (!confirm('Are you sure you want to approve this directly? It will be processed and moved to the Knowledge Base.')) return;
             try {
                 // 1. Clean up old resources if any
+                const token = await user?.getIdToken();
+                
                 if (fullDraft.sourceKnowledgeId) {
                     await fetch('/api/knowledge/delete', {
                         method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
+                        headers: { 
+                            'Content-Type': 'application/json',
+                            'Authorization': `Bearer ${token}`
+                        },
                         body: JSON.stringify({ id: fullDraft.sourceKnowledgeId })
                     }).catch(console.error);
                 }
@@ -197,7 +202,10 @@ export default function Dashboard() {
                 // 3. Auto-ingest into RAG
                 await fetch('/api/knowledge/ingest', {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
+                    headers: { 
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
                     body: JSON.stringify({
                         title: finalTitle,
                         content: finalContent,

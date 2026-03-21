@@ -4,6 +4,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { MessageCircle, X, Send, Bot, User, Loader2 } from 'lucide-react';
 import { parseMarkdown } from '@/lib/utils';
+import { useAuth } from '@/lib/contexts/AuthContext';
 
 type Message = {
   id: string;
@@ -13,6 +14,7 @@ type Message = {
 };
 
 export function FloatingChat() {
+  const { user } = useAuth();
   const [isOpen, setIsOpen] = useState(false);
   const [query, setQuery] = useState('');
   const [messages, setMessages] = useState<Message[]>([
@@ -31,6 +33,9 @@ export function FloatingChat() {
     }
   }, [messages, isOpen]);
 
+  // Don't render chat for unauthenticated users
+  if (!user) return null;
+
   const handleSend = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     if (!query.trim() || isLoading) return;
@@ -44,9 +49,13 @@ export function FloatingChat() {
     setIsLoading(true);
 
     try {
+      const token = await user.getIdToken();
       const res = await fetch('/api/rag-chat', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
         body: JSON.stringify({
           query: userQuery,
           history: messages.slice(1).map(m => ({ role: m.role, content: m.content })),
