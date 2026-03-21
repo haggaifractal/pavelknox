@@ -5,7 +5,8 @@ import { useRouter } from 'next/navigation';
 import { doc, getDoc, updateDoc, collection, addDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebase/client';
 import AuthGuard from '@/components/ui/AuthGuard';
-import { ArrowLeft, Save, CheckCircle, FileText, CheckCircle2, ChevronRight, Mic } from 'lucide-react';
+import { ArrowLeft, Save, CheckCircle, FileText, CheckCircle2, ChevronRight, Mic, ListTodo, AlertTriangle, ExternalLink } from 'lucide-react';
+import TasksPanel from '@/components/tasks/TasksPanel';
 import { Draft } from '@/lib/hooks/usePendingDrafts';
 import { useAuth } from '@/lib/contexts/AuthContext';
 import { motion } from 'framer-motion';
@@ -36,6 +37,7 @@ export default function DraftEditorPage({ params }: EditorPageProps) {
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState('');
+    const [isTasksPanelOpen, setIsTasksPanelOpen] = useState(false);
 
     useEffect(() => {
         if (!authLoading && user && !isAdmin) {
@@ -237,6 +239,17 @@ export default function DraftEditorPage({ params }: EditorPageProps) {
                         </div>
 
                         <div className="flex items-center gap-4 xl:gap-6">
+                            <button
+                                onClick={() => setIsTasksPanelOpen(true)}
+                                className="p-2 text-slate-400 hover:text-indigo-600 dark:text-zinc-500 dark:hover:text-indigo-400 transition-colors flex items-center gap-2 rounded-lg hover:bg-slate-100 dark:hover:bg-zinc-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
+                                title={t('tasks.panelTitle') || 'משימות'}
+                            >
+                                <ListTodo className="w-5 h-5" />
+                                <span className="text-[13px] font-semibold hidden sm:inline-block">{t('tasks.panelTitle') || 'משימות'}</span>
+                            </button>
+
+                            <div className="h-5 w-[1px] bg-slate-200 dark:bg-zinc-800 hidden sm:block"></div>
+
                             <div className="text-[13px] flex items-center font-medium min-w-[80px] justify-end" aria-live="polite">
                                 {saving ? (
                                     <span className="flex items-center text-indigo-600 dark:text-indigo-400">
@@ -317,6 +330,23 @@ export default function DraftEditorPage({ params }: EditorPageProps) {
                             {t('editor.organizedKnowledgeTitle')}
                         </h2>
                         
+                        {(draft as any)?.isDuplicate && (
+                            <div className="mb-4 bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/20 p-4 rounded-xl flex items-start gap-3 transition-colors">
+                                <AlertTriangle className="w-5 h-5 text-amber-600 dark:text-amber-400 mt-0.5 flex-shrink-0" />
+                                <div>
+                                    <h3 className="text-sm font-bold text-amber-800 dark:text-amber-300">אזהרה: ייתכן וזו כפילות</h3>
+                                    <p className="text-xs text-amber-700 dark:text-amber-400/80 mt-1">
+                                        הטקסט בטיוטה זו דומה מאוד למסמך שכבר קיים במאגר הידע.
+                                    </p>
+                                    {(draft as any)?.duplicateSourceUrl && (
+                                        <a href={(draft as any).duplicateSourceUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 mt-2 text-xs font-semibold text-amber-700 dark:text-amber-300 hover:text-amber-900 dark:hover:text-amber-200 underline underline-offset-2">
+                                            צפה במסמך התואם <ExternalLink className="w-3 h-3" />
+                                        </a>
+                                    )}
+                                </div>
+                            </div>
+                        )}
+                        
                         <div className="bg-white dark:bg-[#0c0c0e] rounded-2xl border border-slate-200 dark:border-zinc-800/60 flex-1 flex flex-col overflow-hidden shadow-sm dark:shadow-2xl dark:shadow-black/50 focus-within:border-indigo-300 dark:focus-within:border-zinc-700/80 focus-within:ring-1 focus-within:ring-indigo-300/50 dark:focus-within:ring-zinc-700/50 transition-all group">
                             
                             {/* Editor Header / Meta fields */}
@@ -371,6 +401,14 @@ export default function DraftEditorPage({ params }: EditorPageProps) {
                         </div>
                     </motion.div>
                 </main>
+
+                <TasksPanel 
+                    isOpen={isTasksPanelOpen} 
+                    onClose={() => setIsTasksPanelOpen(false)} 
+                    draftId={draftId as string} 
+                    content={content} 
+                    metadata={{ title, clientName, tags }} 
+                />
             </div>
         </AuthGuard>
     );

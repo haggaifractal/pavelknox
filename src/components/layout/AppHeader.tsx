@@ -45,9 +45,17 @@ export function AppHeader() {
 
                     <div className="flex items-center gap-4">
                         {user && (
-                            <span className="text-[13px] font-medium text-slate-600 dark:text-zinc-500 hidden sm:block bg-slate-100 dark:bg-zinc-900/50 px-3 py-1.5 rounded-full border border-slate-200 dark:border-zinc-800/50">
-                                {user.email}
-                            </span>
+                            <div className="flex items-center gap-4 mr-2 rtl:ml-2">
+                                <button
+                                    onClick={() => router.push('/tasks')}
+                                    className="text-[14px] font-medium text-slate-700 dark:text-zinc-300 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors bg-slate-100/50 dark:bg-zinc-800/30 px-3 py-1.5 rounded-lg border border-transparent hover:border-indigo-100 dark:hover:border-indigo-500/20"
+                                >
+                                    {t('common.navTasks') || 'משימות'}
+                                </button>
+                                <span className="text-[13px] font-medium text-slate-600 dark:text-zinc-500 hidden sm:block bg-slate-100 dark:bg-zinc-900/50 px-3 py-1.5 rounded-full border border-slate-200 dark:border-zinc-800/50">
+                                    {user.email}
+                                </span>
+                            </div>
                         )}
                         <LanguageToggle />
                         <ThemeToggle />

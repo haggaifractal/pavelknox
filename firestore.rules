@@ -58,6 +58,12 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
+    // Tasks: Extracted action items. Readable by viewers, writable by admins.
+    match /tasks/{document=**} {
+      allow read: if isViewer();
+      allow write: if isAdmin();
+    }
+
     // Clients: Global client list. Readable by viewers, writable by admins.
     match /clients/{document=**} {
       allow read: if isViewer();

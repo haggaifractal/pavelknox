@@ -29,11 +29,40 @@ async function processIngestionAsync(docId: string, payload: any) {
         // 2. צנזור וארגון מחדש דרך GPT
         const parsedData = await extractAndRedactKnowledge(extractedText);
 
+        // 2.5 Duplicate Detection via Vector Search
+        let isDuplicate = false;
+        let duplicateSourceUrl = "";
+        try {
+            const { generateEmbedding } = await import('@/lib/ai/embeddings');
+            const { FieldValue } = await import('firebase-admin/firestore');
+            const embedding = await generateEmbedding(extractedText);
+            
+            const snapshot = await adminDb.collection("knowledge_chunks").findNearest('embedding', FieldValue.vector(embedding), {
+                limit: 1,
+                distanceMeasure: 'COSINE',
+                distanceResultField: 'vectorDistance'
+            } as any).get();
+
+            if (!snapshot.empty) {
+                const closestDoc = snapshot.docs[0].data();
+                // 0.06 distance ~= 0.94 cosine similarity
+                if (closestDoc.vectorDistance !== undefined && closestDoc.vectorDistance < 0.06) {
+                    isDuplicate = true;
+                    duplicateSourceUrl = closestDoc.sourceUrl || `/knowledge/${closestDoc.sourceId}`;
+                    console.log(`Duplicate detected for doc ${docId}. Matches source: ${duplicateSourceUrl} with distance: ${closestDoc.vectorDistance}`);
+                }
+            }
+        } catch (err: any) {
+            console.error('Duplicate detection failed (ignoring and continuing):', err.message);
+        }
+
         // 3. יצירת טיוטה (Draft) חדשה במערכת עם הסטטוס pending
         await adminDb.collection('drafts').add({
             ...parsedData,
             status: 'pending',
             originalInputId: docId,
+            isDuplicate,
+            duplicateSourceUrl,
             createdAt: new Date(),
             updatedAt: new Date()
         });

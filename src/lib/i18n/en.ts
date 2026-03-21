@@ -2,6 +2,7 @@ import { he } from './he';
 
 export const en: typeof he = {
   common: {
+    navTasks: 'Tasks',
     loading: 'Loading...',
     error: 'Error',
     success: 'Success',
@@ -191,6 +192,27 @@ export const en: typeof he = {
     privacy: 'Privacy Policy',
     accessibility: 'Accessibility',
     allRightsReserved: 'All rights reserved.'
+  },
+  tasks: {
+    title: 'Task Center',
+    subtitle: 'Manage and monitor all action items extracted from documents.',
+    emptyTitle: 'No Open Tasks',
+    emptyDesc: 'All tasks are completed or no tasks have been added yet.',
+    filterClient: 'Filter by Client',
+    filterAssignee: 'Filter by Assignee',
+    filterStatus: 'Filter by Status',
+    statusPending: 'Pending',
+    statusInProgress: 'In Progress',
+    statusCompleted: 'Completed',
+    noAssignee: 'Unassigned',
+    noDeadline: 'No Deadline',
+    deadlinePre: 'Due:',
+    btnExtract: 'Extract Tasks (AI)',
+    btnSaveTasks: 'Save Tasks to Archive',
+    extracting: 'Extracting tasks...',
+    panelTitle: 'Tasks & Action Items',
+    panelDesc: 'Use AI to extract action items from the current text.',
+    btnViewSource: 'View Source',
   },
   termsPage: {
     title: 'Terms of Use',

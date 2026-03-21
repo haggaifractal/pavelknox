@@ -1,5 +1,6 @@
 export const he = {
   common: {
+    navTasks: 'משימות',
     loading: 'טוען...',
     error: 'שגיאה',
     success: 'הצלחה',
@@ -189,6 +190,27 @@ export const he = {
     privacy: 'מדיניות פרטיות',
     accessibility: 'הצהרת נגישות',
     allRightsReserved: 'כל הזכויות שמורות.'
+  },
+  tasks: {
+    title: 'מרכז משימות',
+    subtitle: 'ניהול ובקרה על כלל המשימות פריטי הפעולה שחולצו ממסמכים.',
+    emptyTitle: 'אין משימות פתוחות',
+    emptyDesc: 'כל המשימות הושלמו או שעדיין לא נוספו משימות חדשות.',
+    filterClient: 'סנן לפי לקוח',
+    filterAssignee: 'סנן לפי אחראי',
+    filterStatus: 'סנן לפי סטטוס',
+    statusPending: 'ממתין',
+    statusInProgress: 'בטיפול',
+    statusCompleted: 'הושלם',
+    noAssignee: 'ללא שיוך',
+    noDeadline: 'ללא תאריך יעד',
+    deadlinePre: 'יעד:',
+    btnExtract: 'חילוץ משימות (AI)',
+    btnSaveTasks: 'שמור משימות בארכיון',
+    extracting: 'מחלץ משימות...',
+    panelTitle: 'משימות ופעולות לביצוע',
+    panelDesc: 'השתמש בבינה מלאכותית לחילוץ משימות מהטקסט הנוכחי.',
+    btnViewSource: 'צפה במקור',
   },
   termsPage: {
     title: 'תנאי שימוש',
