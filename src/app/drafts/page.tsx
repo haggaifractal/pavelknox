@@ -135,6 +135,17 @@ export default function DraftsPage() {
 
             // 3. Commit atomic operations
             await batch.commit();
+
+            // Audit Log for merging
+            await addDoc(collection(db, 'audit_logs'), {
+                action: 'MERGED_DRAFTS',
+                userId: user?.uid,
+                userName: user?.displayName || 'Unknown',
+                resourceId: newDraftRef.id,
+                details: `משתמש מיזג ${selectedDraftIds.size} טיוטות לטיוטה חדשה`,
+                timestamp: new Date()
+            });
+
             setSelectedDraftIds(new Set());
             setIsMergeModalOpen(false);
             refresh();
@@ -188,6 +199,17 @@ export default function DraftsPage() {
                 body: JSON.stringify({ id: draftId })
             });
             if (!res.ok) throw new Error('Failed to delete draft');
+
+            // Audit Log for deletion
+            await addDoc(collection(db, 'audit_logs'), {
+                action: 'DELETED_DRAFT',
+                userId: user?.uid,
+                userName: user?.displayName || 'Unknown',
+                resourceId: draftId,
+                details: `משתמש מחק טיוטה`,
+                timestamp: new Date()
+            });
+
             refresh();
         } catch (error) {
             console.error('Failed to delete draft', error);
@@ -271,6 +293,17 @@ export default function DraftsPage() {
                     body: JSON.stringify({ id })
                 });
                 if (!deleteRes.ok) throw new Error('Failed to securely delete draft during approval');
+
+                // Audit Log for approval
+                await addDoc(collection(db, 'audit_logs'), {
+                    action: 'APPROVED_DRAFT',
+                    userId: user?.uid,
+                    userName: user?.displayName || 'Unknown',
+                    resourceId: kbDocRef.id,
+                    details: `משתמש אישר טיוטה והעביר למאגר הידע: ${finalTitle}`,
+                    timestamp: new Date()
+                });
+
                 refresh();
                 return;
             } catch (err) {

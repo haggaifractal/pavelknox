@@ -18,10 +18,15 @@ export async function GET(req: Request) {
             monthlyTokenLimit: doc.data().monthlyTokenLimit !== undefined ? doc.data().monthlyTokenLimit : 50000,
             lifetimeTokensUsed: doc.data().lifetimeTokensUsed || 0,
             costUSD: doc.data().costUSD || 0,
-            modelsUsed: doc.data().modelsUsed || []
+            modelsUsed: doc.data().modelsUsed || [],
+            departmentIds: doc.data().departmentIds || []
         }));
 
-        return NextResponse.json({ success: true, users });
+        // Fetch all departments to map IDs to names
+        const deptSnapshot = await adminDb.collection('departments').get();
+        const departments = deptSnapshot.docs.map(d => ({ id: d.id, name: d.data().name }));
+
+        return NextResponse.json({ success: true, users, departments });
     } catch (error: any) {
         console.error('Failed to get users token data:', error);
         return NextResponse.json({ error: error.message }, { status: 500 });

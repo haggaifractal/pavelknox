@@ -106,14 +106,25 @@ async function processIngestionAsync(docId: string, payload: any, uid: string) {
         }
 
         // 3. יצירת טיוטה (Draft) חדשה במערכת עם הסטטוס pending
-        await adminDb.collection('drafts').add({
+        const draftRef = await adminDb.collection('drafts').add({
             ...parsedData,
             status: 'pending',
             originalInputId: docId,
             isDuplicate,
             duplicateSourceUrl,
+            createdBy: uid,
             createdAt: new Date(),
             updatedAt: new Date()
+        });
+
+        // Audit Log for creating a new draft
+        await adminDb.collection('audit_logs').add({
+            action: 'CREATED_DRAFT',
+            userId: uid,
+            userName: userData?.displayName || 'Unknown',
+            resourceId: draftRef.id,
+            details: `משתמש יצר טיוטה חדשה בטלגרם: ${parsedData.title}`,
+            timestamp: new Date()
         });
 
         // 4. עדכון רשומת ה-raw_inputs בטקסט המקורי וסטטוס מעובד
@@ -129,12 +140,17 @@ async function processIngestionAsync(docId: string, payload: any, uid: string) {
         const chatId = payload?.message?.chat?.id;
         const botToken = process.env.TELEGRAM_BOT_TOKEN;
         if (chatId && botToken) {
+            const userName = userData?.displayName || '';
+            const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'https://pavelknox.netlify.app';
+            const draftUrl = `${baseUrl}/drafts/${draftRef.id}`;
+            
             await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     chat_id: chatId,
-                    text: `✅ נשמר בהצלחה!\n\nכותרת: ${parsedData.title}\nקטגוריה: ${parsedData.category}\n\nהטיוטה ממתינה ב-Inbox באתר.`
+                    text: `תודה ${userName}, הטיוטה נקלטה בהצלחה!\n\n[לחץ כאן למעבר לטיוטה](${draftUrl})`,
+                    parse_mode: 'Markdown'
                 })
             }).catch(e => console.error('Failed to send Telegram confirmation:', e));
         }
