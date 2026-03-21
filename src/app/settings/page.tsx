@@ -20,6 +20,30 @@ interface UserData {
   creationTime?: string;
 }
 
+const TelegramIdInput = ({ initialValue, onSave, placeholder }: { initialValue: string; onSave: (val: string) => void; placeholder: string }) => {
+    const [value, setValue] = useState(initialValue);
+    
+    useEffect(() => { setValue(initialValue); }, [initialValue]);
+
+    const handleSave = () => {
+        if (value !== initialValue) {
+            onSave(value);
+        }
+    };
+
+    return (
+        <input
+            type="text"
+            value={value}
+            onChange={(e) => setValue(e.target.value)}
+            onBlur={handleSave}
+            onKeyDown={(e) => { if (e.key === 'Enter') handleSave(); }}
+            placeholder={placeholder}
+            className="bg-transparent border border-slate-200 dark:border-zinc-700 rounded p-1 outline-none focus:ring-2 focus:ring-indigo-500 w-full font-mono text-sm"
+        />
+    );
+}
+
 export default function SettingsPage() {
   const { isSuperAdmin, user: currentUser, loading: authLoading } = useAuth();
   const { t, language } = useTranslation();
@@ -55,7 +79,7 @@ export default function SettingsPage() {
       const res = await fetch('/api/users', {
         headers: { Authorization: `Bearer ${token}` }
       });
-      if (!res.ok) throw new Error('Failed to fetch');
+      if (!res.ok) throw new Error(t('settings.errorFetch'));
       const data = await res.json();
       setUsers(data.users || []);
     } catch (err: any) {
@@ -89,8 +113,8 @@ export default function SettingsPage() {
         })
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Failed to invite');
-      setInviteResult(t('settings.inviteSuccess') || 'משתמש הוזמן בהצלחה! קישור איפוס סיסמה:');
+      if (!res.ok) throw new Error(data.error || t('settings.errorInvite'));
+      setInviteResult(t('settings.inviteSuccess'));
       setInviteLink(data.resetLink);
       setInviteEmail('');
       setInviteDepartmentIds([]);
@@ -118,7 +142,7 @@ export default function SettingsPage() {
         },
         body: JSON.stringify({ role: newRole })
       });
-      if (!res.ok) throw new Error('Failed to update role');
+      if (!res.ok) throw new Error(t('settings.errorUpdateRole'));
       fetchUsers(false); // Silent fetch to ensure consistency
     } catch (err: any) {
       setUsers(previousUsers); // Revert
@@ -141,7 +165,7 @@ export default function SettingsPage() {
         },
         body: JSON.stringify({ departmentIds: newDepartmentIds })
       });
-      if (!res.ok) throw new Error('Failed to update departments');
+      if (!res.ok) throw new Error(t('settings.errorUpdateDepts'));
       // No need to fetchUsers() immediately to prevent jitter. Or do silent background fetch.
       fetchUsers(false);
     } catch (err: any) {
@@ -165,7 +189,7 @@ export default function SettingsPage() {
         },
         body: JSON.stringify({ telegramChatId: newId })
       });
-      if (!res.ok) throw new Error('Failed to update Telegram ID');
+      if (!res.ok) throw new Error(t('settings.errorUpdateTelegram'));
       fetchUsers(false);
     } catch (err: any) {
       setUsers(previousUsers); // Revert
@@ -186,7 +210,7 @@ export default function SettingsPage() {
         method: 'DELETE',
         headers: { Authorization: `Bearer ${token}` }
       });
-      if (!res.ok) throw new Error('Failed to delete');
+      if (!res.ok) throw new Error(t('settings.errorDelete'));
       fetchUsers(false);
     } catch (err: any) {
       setUsers(previousUsers); // Revert
@@ -260,7 +284,7 @@ export default function SettingsPage() {
               </select>
             </div>
             <div className="w-full sm:w-48">
-              <label className="block tracking-wide text-xs font-semibold mb-2 text-slate-500">Telegram ID</label>
+              <label className="block tracking-wide text-xs font-semibold mb-2 text-slate-500">{t('settings.telegramIdLabel')}</label>
               <input 
                 type="text"
                 value={inviteTelegramId}
@@ -310,8 +334,8 @@ export default function SettingsPage() {
                      className="flex items-center gap-1.5 px-3 py-1.5 shrink-0 bg-emerald-100 hover:bg-emerald-200 dark:bg-emerald-800/40 dark:hover:bg-emerald-700/50 text-emerald-700 dark:text-emerald-300 rounded-md text-xs font-semibold transition-colors outline-none"
                    >
                      {copied ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
-                     <span className="hidden sm:inline">{copied ? 'הועתק!' : 'העתק קישור'}</span>
-                     <span className="sm:hidden">{copied ? 'הועתק' : 'העתק'}</span>
+                     <span className="hidden sm:inline">{copied ? t('settings.copied') : t('settings.copyLink')}</span>
+                     <span className="sm:hidden">{copied ? t('settings.copied') : t('settings.copyLink')}</span>
                    </button>
                  </div>
                )}
@@ -320,7 +344,7 @@ export default function SettingsPage() {
         </section>
 
         {/* Departments Manager */}
-        <DepartmentsManager />
+        <DepartmentsManager users={users} onUserDepartmentChange={handleDepartmentChange} />
 
         {/* Users Table */}
         <section className="bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 rounded-2xl shadow-sm overflow-hidden">
@@ -329,7 +353,7 @@ export default function SettingsPage() {
                 <thead className="text-xs uppercase bg-slate-50 dark:bg-zinc-950/50 text-slate-500 font-semibold border-b border-slate-200 dark:border-zinc-800">
                   <tr>
                     <th className="px-6 py-4">{t('settings.tableEmail')}</th>
-                    <th className="px-6 py-4 w-40">Telegram ID</th>
+                    <th className="px-6 py-4 w-40">{t('settings.tableTelegramId')}</th>
                     <th className="px-6 py-4 w-40">{t('settings.tableRole')}</th>
                     <th className="px-6 py-4 w-64 hidden sm:table-cell">{t('settings.tableDepartments')}</th>
                     <th className="px-6 py-4 hidden md:table-cell">{t('settings.tableLastLogin')}</th>
@@ -349,12 +373,10 @@ export default function SettingsPage() {
                         </div>
                       </td>
                       <td className="px-6 py-4">
-                        <input
-                          type="text"
-                          value={u.telegramChatId || ''}
-                          onChange={(e) => handleTelegramIdChange(u.uid, e.target.value)}
-                          placeholder="ID..."
-                          className="bg-transparent border border-slate-200 dark:border-zinc-700 rounded p-1 outline-none focus:ring-2 focus:ring-indigo-500 w-full font-mono text-sm"
+                        <TelegramIdInput
+                          initialValue={u.telegramChatId || ''}
+                          onSave={(val) => handleTelegramIdChange(u.uid, val)}
+                          placeholder={t('settings.telegramIdPlaceholder') || 'ID...'}
                         />
                       </td>
                       <td className="px-6 py-4">
@@ -380,7 +402,7 @@ export default function SettingsPage() {
                          </div>
                       </td>
                       <td className="px-6 py-4 hidden md:table-cell text-slate-500">
-                         {u.lastLoginAt ? new Date(u.lastLoginAt).toLocaleDateString() : 'Never'}
+                         {u.lastLoginAt ? new Intl.DateTimeFormat(language === 'he' ? 'he-IL' : 'en-US').format(new Date(u.lastLoginAt)) : t('settings.never')}
                       </td>
                       <td className="px-6 py-4 text-center">
                          {u.uid !== currentUser?.uid && (

@@ -22,6 +22,7 @@ import BulkActionBar from '@/components/ui/BulkActionBar';
 import MergeDraftsModal from '@/components/ui/MergeDraftsModal';
 import TagSelector from '@/components/ui/TagSelector';
 import ClientSelector from '@/components/ui/ClientSelector';
+import TaskTransferModal from '@/components/modals/TaskTransferModal';
 
 export default function DraftsPage() {
     const { user, isAdmin, isSuperAdmin, permissions, loading: authLoading } = useAuth();
@@ -30,6 +31,11 @@ export default function DraftsPage() {
     const [filterTag, setFilterTag] = useState<string>('');
     const { drafts, loading, loadingMore, hasMore, error, loadMore, refresh } = usePendingDrafts({ status: filterStatus, tagId: filterTag });
     const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
+    const [transferModal, setTransferModal] = useState<{
+        isOpen: boolean;
+        entityId: string;
+        taskCount: number;
+    }>({ isOpen: false, entityId: '', taskCount: 0 });
     const [selectedDraftIds, setSelectedDraftIds] = useState<Set<string>>(new Set());
     const [isMergeModalOpen, setIsMergeModalOpen] = useState(false);
     const [toastMessage, setToastMessage] = useState<string | null>(null);
@@ -100,7 +106,7 @@ export default function DraftsPage() {
         try {
             const batch = writeBatch(db);
             selectedDraftIds.forEach(id => {
-                batch.delete(doc(db, 'drafts', id));
+                batch.update(doc(db, 'drafts', id), { isDeleted: true, deletedAt: new Date() });
             });
             await batch.commit();
             setSelectedDraftIds(new Set());
@@ -176,19 +182,28 @@ export default function DraftsPage() {
             if (!tasksSnap.empty) {
                 const openTasks = tasksSnap.docs.filter(doc => {
                     const status = doc.data().status;
-                    return status === 'pending' || status === 'in_progress';
+                    return status === 'pending' || status === 'in_progress' || !doc.data().isDeleted;
                 });
                 
-                if (openTasks.length > 0) {
-                    const confirmMsg = t('drafts.warnTasksDelete') || `⚠️ שים לב: לטיוטה זו מקושרות ${openTasks.length} משימות פעילות. מחיקת הטיוטה תמחק גם את המשימות הללו. האם אתה בטוח שברצונך למחוק?`;
-                    if (!confirm(confirmMsg)) return;
-                } else {
-                    if (!confirm(t('dashboard.confirmDelete'))) return;
+                // We filter completely deleted tasks above. If there are any non-deleted ones:
+                const activeLinkedTasks = openTasks.filter(doc => doc.data().isDeleted !== true);
+
+                if (activeLinkedTasks.length > 0) {
+                    setTransferModal({ isOpen: true, entityId: draftId, taskCount: activeLinkedTasks.length });
+                    return;
                 }
-            } else {
-                if (!confirm(t('dashboard.confirmDelete'))) return;
             }
 
+            if (!confirm(t('dashboard.confirmDelete'))) return;
+            await performDelete(draftId, null);
+        } catch (error) {
+            console.error('Failed to pre-check draft deletion', error);
+            alert(t('common.error'));
+        }
+    };
+
+    const performDelete = async (draftId: string, transferToClientName: string | null) => {
+        try {
             const token = await user?.getIdToken();
             const res = await fetch('/api/drafts/delete', {
                 method: 'POST',
@@ -196,7 +211,7 @@ export default function DraftsPage() {
                     'Content-Type': 'application/json',
                     'Authorization': `Bearer ${token}`
                 },
-                body: JSON.stringify({ id: draftId })
+                body: JSON.stringify({ id: draftId, transferToClientName })
             });
             if (!res.ok) throw new Error('Failed to delete draft');
 
@@ -206,11 +221,12 @@ export default function DraftsPage() {
                 userId: user?.uid,
                 userName: user?.displayName || 'Unknown',
                 resourceId: draftId,
-                details: `משתמש מחק טיוטה`,
+                details: transferToClientName ? `משתמש מחק טיוטה והעביר משימות ללקוח ${transferToClientName}` : `משתמש מחק טיוטה ומשימות מקושרות`,
                 timestamp: new Date()
             });
 
             refresh();
+            setTransferModal({ isOpen: false, entityId: '', taskCount: 0 });
         } catch (error) {
             console.error('Failed to delete draft', error);
             alert(t('common.error'));
@@ -583,7 +599,7 @@ export default function DraftsPage() {
                                                             )}
                                                             <span className="text-[11px] text-slate-400 dark:text-zinc-500 flex items-center font-medium">
                                                                 <Clock className="w-3 h-3 rtl:ml-1 ltr:mr-1 opacity-70" aria-hidden="true" />
-                                                                {draft.createdAt?.toLocaleDateString ? draft.createdAt.toLocaleDateString() : ''}
+                                                                {draft.createdAt?.toLocaleString ? draft.createdAt.toLocaleString('he-IL', { hour12: false, day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit' }).replace(',', '') : ''}
                                                             </span>
                                                         </div>
                                                         <h4 className="text-[14px] font-bold text-slate-900 dark:text-zinc-100 line-clamp-1 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">
@@ -751,6 +767,20 @@ export default function DraftsPage() {
                     onClose={() => setIsMergeModalOpen(false)}
                     drafts={drafts.filter(d => selectedDraftIds.has(d.id))}
                     onConfirm={executeMerge}
+                />
+
+                {/* Task Transfer Modal */}
+                <TaskTransferModal
+                    isOpen={transferModal.isOpen}
+                    onClose={() => setTransferModal({ isOpen: false, entityId: '', taskCount: 0 })}
+                    onConfirmTransfer={async (newClientName) => {
+                        await performDelete(transferModal.entityId, newClientName);
+                    }}
+                    onConfirmDeleteAll={async () => {
+                        await performDelete(transferModal.entityId, null);
+                    }}
+                    taskCount={transferModal.taskCount}
+                    entityType="draft"
                 />
             </div>
         </AuthGuard>

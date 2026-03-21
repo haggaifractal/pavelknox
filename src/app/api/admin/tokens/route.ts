@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { adminDb } from '@/lib/firebase/admin';
 import { verifyAdmin } from '@/lib/firebase/serverAuth';
+import { createAuditLog } from '@/lib/services/audit';
 
 export async function GET(req: Request) {
     try {
@@ -49,6 +50,18 @@ export async function POST(req: Request) {
 
         await adminDb.collection('users').doc(uid).update({
             monthlyTokenLimit: newLimit
+        });
+
+        // Audit Log
+        await createAuditLog({
+            actionType: 'UPDATE_TOKEN_LIMIT',
+            userId: auth.uid,
+            userEmail: auth.email || 'unknown',
+            targetId: uid,
+            details: {
+                newLimit,
+                message: `Updated monthly token limit to ${newLimit} for user ${uid}`
+            }
         });
 
         return NextResponse.json({ success: true });

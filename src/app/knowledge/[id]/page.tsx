@@ -3,7 +3,7 @@
 import AuthGuard from '@/components/ui/AuthGuard';
 import { use, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { doc, getDoc, collection, query, onSnapshot, addDoc, getDocs, where } from 'firebase/firestore';
+import { doc, getDoc, collection, query, onSnapshot, addDoc, getDocs, where, updateDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebase/client';
 import { ArrowLeft, Database, Calendar, FileCheck2, User, ChevronRight, Edit2, Trash2, Loader2 } from 'lucide-react';
 import { motion } from 'framer-motion';
@@ -11,6 +11,7 @@ import { ThemeToggle } from '@/components/ThemeToggle';
 import { useTranslation } from '@/lib/contexts/LanguageContext';
 import { useAuth } from '@/lib/contexts/AuthContext';
 import { parseMarkdown } from '@/lib/utils';
+import TaskTransferModal from '@/components/modals/TaskTransferModal';
 
 interface KnowledgeViewProps {
     params: Promise<{ id: string }>;
@@ -28,6 +29,10 @@ export default function KnowledgeViewPage({ params }: KnowledgeViewProps) {
     const [allTags, setAllTags] = useState<Record<string, { id: string; label: string; colorHex: string }>>({});
     const [isEditing, setIsEditing] = useState(false);
     const [isDeleting, setIsDeleting] = useState(false);
+    const [transferModal, setTransferModal] = useState<{
+        isOpen: boolean;
+        taskCount: number;
+    }>({ isOpen: false, taskCount: 0 });
 
     const handleEdit = async () => {
         setIsEditing(true);
@@ -46,6 +51,22 @@ export default function KnowledgeViewPage({ params }: KnowledgeViewProps) {
                 type: document.type || 'article',
                 sourceKnowledgeId: document.id 
             });
+
+            const tasksQuery = query(collection(db, 'tasks'), where('sourceId', '==', document.id));
+            const tasksSnap = await getDocs(tasksQuery);
+            if (!tasksSnap.empty) {
+                const batchPromises = tasksSnap.docs.map(taskDoc => 
+                    updateDoc(doc(db, 'tasks', taskDoc.id), {
+                        sourceId: newDocRef.id,
+                        sourceType: 'draft',
+                        sourceUrl: `/drafts/${newDocRef.id}`,
+                        updatedAt: new Date()
+                    })
+                );
+                await Promise.all(batchPromises);
+                console.log(`Moved ${tasksSnap.size} tasks to new draft`);
+            }
+
             router.push(`/drafts/${newDocRef.id}`);
         } catch (e) {
             console.error(e);
@@ -62,20 +83,29 @@ export default function KnowledgeViewPage({ params }: KnowledgeViewProps) {
             if (!tasksSnap.empty) {
                 const openTasks = tasksSnap.docs.filter(doc => {
                     const status = doc.data().status;
-                    return status === 'pending' || status === 'in_progress';
+                    return status === 'pending' || status === 'in_progress' || !doc.data().isDeleted;
                 });
                 
-                if (openTasks.length > 0) {
-                    const confirmMsg = t('knowledgeBase.warnTasksDelete') || `⚠️ שים לב: למסמך זה מקושרות ${openTasks.length} משימות פעילות. מחיקת המסמך תמחק גם את המשימות הללו. האם אתה בטוח שברצונך למחוק?`;
-                    if (!confirm(confirmMsg)) return;
-                } else {
-                    if (!confirm(t('knowledgeBase.confirmDelete') || 'האם אתה בטוח שברצונך למחוק מסמך זה? המחיקה תסיר גם את הלמידה של ה-AI.')) return;
+                const activeLinkedTasks = openTasks.filter(doc => doc.data().isDeleted !== true);
+
+                if (activeLinkedTasks.length > 0) {
+                    setTransferModal({ isOpen: true, taskCount: activeLinkedTasks.length });
+                    return; // Blocking deletion until transferred
                 }
-            } else {
-                if (!confirm(t('knowledgeBase.confirmDelete') || 'האם אתה בטוח שברצונך למחוק מסמך זה? המחיקה תסיר גם את הלמידה של ה-AI.')) return;
             }
 
-            setIsDeleting(true);
+            if (!confirm(t('knowledgeBase.confirmDelete') || 'האם אתה בטוח שברצונך למחוק מסמך זה? המחיקה תסיר גם את הלמידה של ה-AI.')) return;
+            
+            await performDelete(null);
+        } catch (e) {
+            console.error('Failed to pre-check deletion', e);
+            alert('Failed to pre-check deletion');
+        }
+    };
+
+    const performDelete = async (transferToClientName: string | null) => {
+        setIsDeleting(true);
+        try {
             const token = await user?.getIdToken(true);
             const res = await fetch('/api/knowledge/delete', {
                 method: 'POST',
@@ -83,7 +113,7 @@ export default function KnowledgeViewPage({ params }: KnowledgeViewProps) {
                     'Content-Type': 'application/json',
                     'Authorization': `Bearer ${token}`
                 },
-                body: JSON.stringify({ id: document.id }),
+                body: JSON.stringify({ id: document.id, transferToClientName }),
             });
             if (res.ok) {
                 router.push('/knowledge');
@@ -180,7 +210,7 @@ export default function KnowledgeViewPage({ params }: KnowledgeViewProps) {
                                 </span>
                                 <span className="flex items-center gap-1.5 bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 px-2.5 py-1 rounded-full shadow-sm">
                                     <Calendar className="w-3.5 h-3.5" aria-hidden="true" />
-                                    {document.publishedAt?.toDate ? document.publishedAt.toDate().toLocaleDateString() : t('knowledgeBase.unknownDate')}
+                                    {document.publishedAt?.toDate ? document.publishedAt.toDate().toLocaleString('he-IL', { hour12: false, day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit' }).replace(',', '') : t('knowledgeBase.unknownDate')}
                                 </span>
                                 {document.clientName && (
                                     <span className="flex items-center gap-1.5 bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 px-2.5 py-1 rounded-full shadow-sm">
@@ -240,6 +270,16 @@ export default function KnowledgeViewPage({ params }: KnowledgeViewProps) {
                     </motion.article>
                 </main>
             </div>
+            
+            <TaskTransferModal
+                isOpen={transferModal.isOpen}
+                onClose={() => setTransferModal({ isOpen: false, taskCount: 0 })}
+                onConfirmTransfer={async (newClientName) => {
+                    await performDelete(newClientName);
+                }}
+                taskCount={transferModal.taskCount}
+                entityType="knowledge"
+            />
         </AuthGuard>
     );
 }

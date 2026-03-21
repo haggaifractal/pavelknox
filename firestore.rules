@@ -117,15 +117,21 @@ service cloud.firestore {
       }
     }
 
-    // Clients: Global client list. Readable by viewers, writable by admins.
+    // Clients: Global client list. Readable by viewers, writable by admins. Participants can create explicitly from drafts.
     match /clients/{document=**} {
       allow read: if isViewer();
-      allow write: if isAdmin() &&
-                   (!request.resource.data.keys().hasAny(['name']) || request.resource.data.name.size() <= 100) &&
-                   (!request.resource.data.keys().hasAny(['phone']) || request.resource.data.phone.size() <= 20) &&
-                   (!request.resource.data.keys().hasAny(['description']) || request.resource.data.description.size() <= 1000) &&
-                   (!request.resource.data.keys().hasAny(['budget']) || request.resource.data.budget is int) &&
-                   (!request.resource.data.keys().hasAny(['cost']) || request.resource.data.cost is int);
+      allow create: if (isAdmin() || canAccessKnowledgeControl()) &&
+                   (!request.resource.data.keys().hasAny(['name']) || request.resource.data.name == null || request.resource.data.name.size() <= 100) &&
+                   (!request.resource.data.keys().hasAny(['phone']) || request.resource.data.phone == null || request.resource.data.phone.size() <= 20) &&
+                   (!request.resource.data.keys().hasAny(['description']) || request.resource.data.description == null || request.resource.data.description.size() <= 1000) &&
+                   (!request.resource.data.keys().hasAny(['budget']) || request.resource.data.budget == null || request.resource.data.budget is number) &&
+                   (!request.resource.data.keys().hasAny(['cost']) || request.resource.data.cost == null || request.resource.data.cost is number);
+      allow update, delete: if isAdmin() &&
+                   (!request.resource.data.keys().hasAny(['name']) || request.resource.data.name == null || request.resource.data.name.size() <= 100) &&
+                   (!request.resource.data.keys().hasAny(['phone']) || request.resource.data.phone == null || request.resource.data.phone.size() <= 20) &&
+                   (!request.resource.data.keys().hasAny(['description']) || request.resource.data.description == null || request.resource.data.description.size() <= 1000) &&
+                   (!request.resource.data.keys().hasAny(['budget']) || request.resource.data.budget == null || request.resource.data.budget is number) &&
+                   (!request.resource.data.keys().hasAny(['cost']) || request.resource.data.cost == null || request.resource.data.cost is number);
     }
 
     // Departments: Organization departments. Readable by viewers, writable by super admins.

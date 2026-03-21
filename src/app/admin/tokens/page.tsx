@@ -44,7 +44,7 @@ export default function AdminTokensPage() {
             const res = await fetch('/api/admin/tokens', {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
-            if (!res.ok) throw new Error('Failed to fetch token data');
+            if (!res.ok) throw new Error(t('tokens.fetchError'));
             const data = await res.json();
             setUsers(data.users || []);
             setDepartments(data.departments || []);
@@ -59,7 +59,7 @@ export default function AdminTokensPage() {
         try {
             const token = await user?.getIdToken();
             const numericLimit = parseInt(editValue, 10);
-            if (isNaN(numericLimit)) throw new Error('Invalid limit');
+            if (isNaN(numericLimit)) throw new Error(t('tokens.invalidLimit'));
 
             const res = await fetch('/api/admin/tokens', {
                 method: 'POST',
@@ -69,7 +69,7 @@ export default function AdminTokensPage() {
                 },
                 body: JSON.stringify({ uid, newLimit: numericLimit })
             });
-            if (!res.ok) throw new Error('Failed to update limit');
+            if (!res.ok) throw new Error(t('tokens.updateLimitError'));
             
             setUsers(users.map(u => u.uid === uid ? { ...u, monthlyTokenLimit: numericLimit } : u));
             setEditingUid(null);
@@ -83,13 +83,13 @@ export default function AdminTokensPage() {
             <table className="w-full text-right text-sm text-slate-600 dark:text-zinc-400">
                 <thead className="text-xs text-slate-500 bg-slate-50 dark:bg-zinc-800/50 dark:text-zinc-400 uppercase border-b border-slate-200 dark:border-zinc-800">
                     <tr>
-                        <th className="px-6 py-4 font-medium">שם עובד</th>
-                        <th className="px-6 py-4 font-medium">אימייל</th>
-                        <th className="px-6 py-4 font-medium">צריכה החודש / חסם</th>
-                        <th className="px-6 py-4 font-medium">סה"כ היסטורי</th>
-                        <th className="px-6 py-4 font-medium">עלות מצטברת ($)</th>
-                        <th className="px-6 py-4 font-medium">מודלים</th>
-                        <th className="px-6 py-4 font-medium text-left">פעולות</th>
+                        <th className="px-6 py-4 font-medium">{t('tokens.tableHeaderName')}</th>
+                        <th className="px-6 py-4 font-medium">{t('tokens.tableHeaderEmail')}</th>
+                        <th className="px-6 py-4 font-medium">{t('tokens.tableHeaderUsage')}</th>
+                        <th className="px-6 py-4 font-medium">{t('tokens.tableHeaderHistory')}</th>
+                        <th className="px-6 py-4 font-medium">{t('tokens.tableHeaderCost')}</th>
+                        <th className="px-6 py-4 font-medium">{t('tokens.tableHeaderModels')}</th>
+                        <th className="px-6 py-4 font-medium text-left">{t('tokens.tableHeaderActions')}</th>
                     </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-200 dark:divide-zinc-800">
@@ -140,7 +140,7 @@ export default function AdminTokensPage() {
                                         </div>
                                     ) : (
                                         <button onClick={() => { setEditingUid(u.uid); setEditValue(u.monthlyTokenLimit.toString()); }} className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-500/10 hover:bg-blue-100 dark:hover:bg-blue-500/20 rounded-lg transition-colors">
-                                            <Edit3 className="w-3 h-3" /> ערוך חסם
+                                            <Edit3 className="w-3 h-3" /> {t('tokens.btnEditLimit')}
                                         </button>
                                     )}
                                 </td>
@@ -162,10 +162,10 @@ export default function AdminTokensPage() {
                         </div>
                         <div>
                             <h1 className="text-2xl font-bold text-slate-900 dark:text-zinc-100 tracking-tight">
-                                {t('common.navAdminTokens') || 'ניהול משאבי AI (Tokens)'}
+                                {t('tokens.title')}
                             </h1>
                             <p className="text-sm text-slate-500 dark:text-zinc-400 mt-1">
-                                הענקת חסמים חודשיים ומעקב אחר צריכת משאבי העובדים בצ'אט
+                                {t('tokens.subtitle')}
                             </p>
                         </div>
                     </div>
@@ -180,19 +180,19 @@ export default function AdminTokensPage() {
                 {/* Org Totals */}
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
                     <div className="bg-white dark:bg-zinc-900 p-6 rounded-2xl shadow-sm border border-slate-200 dark:border-zinc-800">
-                        <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400 dark:text-zinc-500 mb-2">סה"כ עלות ארגונית</h3>
+                        <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400 dark:text-zinc-500 mb-2">{t('tokens.orgTotalCost')}</h3>
                         <div className="text-3xl font-black text-emerald-600 dark:text-emerald-400">
                             ${users.reduce((acc, u) => acc + (u.costUSD || 0), 0).toFixed(4)}
                         </div>
                     </div>
                     <div className="bg-white dark:bg-zinc-900 p-6 rounded-2xl shadow-sm border border-slate-200 dark:border-zinc-800">
-                        <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400 dark:text-zinc-500 mb-2">סה"כ טוקנים החודש</h3>
+                        <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400 dark:text-zinc-500 mb-2">{t('tokens.orgTotalTokens')}</h3>
                         <div className="text-3xl font-black text-blue-600 dark:text-blue-400">
                             {new Intl.NumberFormat().format(users.reduce((acc, u) => acc + (u.tokensUsedThisMonth || 0), 0))}
                         </div>
                     </div>
                     <div className="bg-white dark:bg-zinc-900 p-6 rounded-2xl shadow-sm border border-slate-200 dark:border-zinc-800">
-                         <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400 dark:text-zinc-500 mb-2">משתמשים פעילים</h3>
+                         <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400 dark:text-zinc-500 mb-2">{t('tokens.activeUsers')}</h3>
                          <div className="text-3xl font-black text-slate-900 dark:text-zinc-100">
                             {users.filter(u => u.tokensUsedThisMonth > 0).length} / {users.length}
                          </div>
@@ -212,11 +212,11 @@ export default function AdminTokensPage() {
                                         <div className="w-1 h-6 bg-blue-500 rounded-full"></div>
                                         {dept.name}
                                         <span className="text-xs font-normal text-slate-500 dark:text-zinc-500 mr-2">
-                                            ({deptUsers.length} משתמשים)
+                                            {t('tokens.usersCount', { count: deptUsers.length })}
                                         </span>
                                     </h2>
                                     <div className="text-sm font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-500/10 px-3 py-1 rounded-lg">
-                                        עלות מחלקתית: ${deptCost.toFixed(5)}
+                                        {t('tokens.deptCost', { cost: deptCost.toFixed(5) })}
                                     </div>
                                 </div>
                                 <div className="bg-white dark:bg-zinc-900 rounded-2xl shadow-sm border border-slate-200 dark:border-zinc-800 overflow-hidden">
@@ -233,7 +233,7 @@ export default function AdminTokensPage() {
                     {/* Users without departments */}
                     {departments.length > 0 && users.filter(u => !u.departmentIds || u.departmentIds.length === 0).length > 0 && (
                         <div className="space-y-4">
-                            <h2 className="text-lg font-bold text-slate-800 dark:text-zinc-200 px-2">ללא מחלקה</h2>
+                            <h2 className="text-lg font-bold text-slate-800 dark:text-zinc-200 px-2">{t('tokens.noDept')}</h2>
                             <div className="bg-white dark:bg-zinc-900 rounded-2xl shadow-sm border border-slate-200 dark:border-zinc-800 overflow-hidden">
                                 {renderTable(users.filter(u => !u.departmentIds || u.departmentIds.length === 0))}
                             </div>

@@ -65,6 +65,7 @@ export function usePendingDrafts(filter: DraftFilter = { status: 'pending' }, pa
             const userDeptIds = (user as any)?.departmentIds || [];
             snapshot.forEach((doc) => {
                 const data = doc.data();
+                if (data.isDeleted === true) return;
                 
                 const isGlobal = !data.visibilityScope || data.visibilityScope === 'global';
                 const hasIntersection = data.departmentIds?.some((id: string) => userDeptIds.includes(id));

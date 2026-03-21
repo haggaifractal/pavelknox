@@ -10,14 +10,14 @@ export async function POST(req: Request) {
     }
 
     const body = await req.json();
-    const { id } = body;
+    const { id, transferToClientName } = body;
 
     if (!id) {
       return NextResponse.json({ error: 'Document ID is required' }, { status: 400 });
     }
 
-    // 1. Delete from knowledge_base
-    await adminDb.collection('knowledge_base').doc(id).delete();
+    // 1. Soft Delete from knowledge_base
+    await adminDb.collection('knowledge_base').doc(id).update({ isDeleted: true, deletedAt: new Date() });
 
     // 2. Delete all existing chunks for this knowledge document
     // In our ingestion, sourceUrl is set to `/knowledge/${id}`
@@ -44,7 +44,15 @@ export async function POST(req: Request) {
     if (!tasksSnapshot.empty) {
       const batch = adminDb.batch();
       tasksSnapshot.docs.forEach((doc) => {
-        batch.delete(doc.ref);
+        if (transferToClientName) {
+            batch.update(doc.ref, { 
+                clientName: transferToClientName, 
+                sourceId: null, 
+                sourceType: 'transferred' 
+            });
+        } else {
+            batch.update(doc.ref, { isDeleted: true, deletedAt: new Date() });
+        }
       });
       await batch.commit();
       deletedTasksCount = tasksSnapshot.size;

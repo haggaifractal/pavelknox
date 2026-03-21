@@ -11,7 +11,7 @@ export async function POST(req: Request) {
         }
 
         const body = await req.json();
-        const { id } = body;
+        const { id, transferToClientName } = body;
 
         if (!id) {
             return NextResponse.json({ error: 'Draft ID is required' }, { status: 400 });
@@ -36,8 +36,8 @@ export async function POST(req: Request) {
             }
         }
 
-        // Delete draft itself
-        await adminDb.collection('drafts').doc(id).delete();
+        // Soft delete draft itself
+        await adminDb.collection('drafts').doc(id).update({ isDeleted: true, deletedAt: new Date() });
 
         // Cascade delete associated tasks
         const tasksSnapshot = await adminDb.collection('tasks').where('sourceId', '==', id).get();
@@ -45,7 +45,15 @@ export async function POST(req: Request) {
         if (!tasksSnapshot.empty) {
             const batch = adminDb.batch();
             tasksSnapshot.docs.forEach(doc => {
-                batch.delete(doc.ref);
+                if (transferToClientName) {
+                    batch.update(doc.ref, { 
+                        clientName: transferToClientName, 
+                        sourceId: null, 
+                        sourceType: 'transferred' 
+                    });
+                } else {
+                    batch.update(doc.ref, { isDeleted: true, deletedAt: new Date() });
+                }
             });
             await batch.commit();
             deletedTasksCount = tasksSnapshot.size;
@@ -59,7 +67,8 @@ export async function POST(req: Request) {
             targetId: id,
             details: {
                 deletedAssociatedRawInput: deletedRawInput,
-                deletedTasksCount,
+                affectedTasksCount: deletedTasksCount,
+                transferredTo: transferToClientName || null,
                 originalInputId: draftData?.originalInputId || null,
                 title: draftData?.title || draftData?.clientName || 'Untitled'
             }

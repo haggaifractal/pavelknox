@@ -41,6 +41,7 @@ export default function KnowledgeBasePage() {
             const userDeptIds = (user as any)?.departmentIds || [];
             snapshot.forEach((doc) => {
                 const data = doc.data();
+                if (data.isDeleted === true) return;
                 const isGlobal = !data.visibilityScope || data.visibilityScope === 'global';
                 const hasIntersection = data.departmentIds?.some((id: string) => userDeptIds.includes(id));
                 const canView = isAdmin || isGlobal || hasIntersection;
@@ -177,7 +178,7 @@ export default function KnowledgeBasePage() {
                                             </div>
                                             <div className="flex items-center gap-1.5 text-[11px] font-medium text-slate-400 dark:text-zinc-500">
                                                 <Calendar className="w-3.5 h-3.5" aria-hidden="true" />
-                                                {doc.publishedAt?.toDate ? doc.publishedAt.toDate().toLocaleDateString() : ''}
+                                                {doc.publishedAt?.toDate ? doc.publishedAt.toDate().toLocaleString('he-IL', { hour12: false, day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit' }).replace(',', '') : ''}
                                             </div>
                                         </div>
 

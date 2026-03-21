@@ -12,9 +12,10 @@ interface AssigneeSelectorProps {
     placeholder?: string;
     readOnly?: boolean;
     className?: string;
+    localSuggestions?: string[];
 }
 
-export default function AssigneeSelector({ value, onChange, placeholder = 'Select assignee...', readOnly = false, className }: AssigneeSelectorProps) {
+export default function AssigneeSelector({ value, onChange, placeholder = 'Select assignee...', readOnly = false, className, localSuggestions }: AssigneeSelectorProps) {
     const [open, setOpen] = useState(false);
     const [search, setSearch] = useState('');
     const [users, setUsers] = useState<{uid: string, displayName: string}[]>([]);
@@ -92,8 +93,17 @@ export default function AssigneeSelector({ value, onChange, placeholder = 'Selec
         }
     };
 
-    const filteredUsers = users.filter(u => u.displayName.toLowerCase().includes(search.toLowerCase()));
-    const exactMatch = users.find(u => u.displayName.toLowerCase() === search.trim().toLowerCase());
+    const allUsers = [...users];
+    if (localSuggestions) {
+        localSuggestions.forEach(name => {
+            if (name && !allUsers.some(u => u.displayName.toLowerCase() === name.toLowerCase())) {
+                allUsers.push({ uid: `local-${name}`, displayName: name });
+            }
+        });
+    }
+
+    const filteredUsers = allUsers.filter(u => u.displayName.toLowerCase().includes(search.toLowerCase()));
+    const exactMatch = allUsers.find(u => u.displayName.toLowerCase() === search.trim().toLowerCase());
 
     const handleSelect = (assigneeName: string, uid: string | null) => {
         onChange({ displayName: assigneeName, uid });
@@ -162,7 +172,7 @@ export default function AssigneeSelector({ value, onChange, placeholder = 'Selec
                                         <span className="font-medium text-slate-700 dark:text-zinc-300">{u.displayName}</span>
                                         {value === u.displayName && <Check className="w-4 h-4 ml-2 rtl:mr-2 text-indigo-600 dark:text-indigo-400" />}
                                     </button>
-                                    {isCustom && (
+                                    {isCustom && !u.uid.startsWith('local-') && (
                                         <button
                                             onClick={(e) => handleDeleteCustom(e, u)}
                                             title="מחק אחראי זמני"

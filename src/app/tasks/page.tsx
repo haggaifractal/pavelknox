@@ -74,6 +74,10 @@ export default function TasksPage() {
     // Editing State
     const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
     const [editForm, setEditForm] = useState<Partial<Task>>({});
+    
+    // Bulk Selection
+    const [selectedTasks, setSelectedTasks] = useState<string[]>([]);
+    const [isSelectionMode, setIsSelectionMode] = useState(false);
 
     useEffect(() => {
         const constraints: QueryConstraint[] = [orderBy('createdAt', 'desc')];
@@ -101,6 +105,7 @@ export default function TasksPage() {
             
             snapshot.forEach((d) => {
                 const data = d.data();
+                if (data.isDeleted === true) return;
                 const isGlobal = !data.visibilityScope || data.visibilityScope === 'global';
                 const hasIntersection = data.departmentIds?.some((id: string) => userDeptIds.includes(id));
                 const isAssignee = data.assigneeId === user?.uid;
@@ -138,6 +143,32 @@ export default function TasksPage() {
             });
         } catch (error) {
             console.error('Failed to update task status:', error);
+        }
+    };
+
+    const handleBulkDelete = async () => {
+        if (!isAdmin || selectedTasks.length === 0) return;
+        if (!confirm(`האם אתה בטוח שברצונך למחוק ${selectedTasks.length} משימות?`)) return;
+        
+        try {
+            const token = await user?.getIdToken(true);
+            const promises = selectedTasks.map(taskId => 
+                fetch('/api/tasks/delete', {
+                    method: 'POST',
+                    headers: { 
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify({ id: taskId }),
+                })
+            );
+            
+            await Promise.all(promises);
+            setSelectedTasks([]);
+            setIsSelectionMode(false);
+        } catch (error) {
+            console.error("Bulk delete failed", error);
+            alert("שגיאה במחיקת המשימות");
         }
     };
 
@@ -214,12 +245,39 @@ export default function TasksPage() {
                     
                     {/* Header */}
                     <div className="mb-8">
-                        <h1 className="text-3xl font-extrabold text-slate-900 dark:text-zinc-100 tracking-tight">
-                            {t('tasks.title') || 'מרכז משימות'}
-                        </h1>
-                        <p className="text-slate-500 dark:text-zinc-400 mt-2">
-                            {t('tasks.subtitle') || 'ניהול ובקרה על פריטי פעולה מכלל המסמכים.'}
-                        </p>
+                        <div className="flex justify-between items-start">
+                            <div>
+                                <h1 className="text-3xl font-extrabold text-slate-900 dark:text-zinc-100 tracking-tight">
+                                    {t('tasks.title') || 'מרכז משימות'}
+                                </h1>
+                                <p className="text-slate-500 dark:text-zinc-400 mt-2">
+                                    {t('tasks.subtitle') || 'ניהול ובקרה על פריטי פעולה מכלל המסמכים.'}
+                                </p>
+                            </div>
+                            {isAdmin && (
+                                <div className="flex flex-col items-end gap-2">
+                                    <button 
+                                        onClick={() => {
+                                            setIsSelectionMode(!isSelectionMode);
+                                            if (isSelectionMode) setSelectedTasks([]);
+                                        }}
+                                        className={`px-4 py-2 rounded-xl text-sm font-medium transition-all ${isSelectionMode ? 'bg-indigo-100 dark:bg-indigo-500/20 text-indigo-700 dark:text-indigo-400' : 'bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 text-slate-700 dark:text-zinc-300 hover:bg-slate-50 dark:hover:bg-zinc-800'}`}
+                                    >
+                                        {isSelectionMode ? 'ביטול מחיקה מרובה' : 'מחיקה מרובה'}
+                                    </button>
+                                    
+                                    {isSelectionMode && selectedTasks.length > 0 && (
+                                        <button 
+                                            onClick={handleBulkDelete}
+                                            className="flex items-center gap-1.5 px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-sm font-medium transition-colors shadow-sm"
+                                        >
+                                            <Trash2 className="w-4 h-4" />
+                                            מחק {selectedTasks.length} משימות
+                                        </button>
+                                    )}
+                                </div>
+                            )}
+                        </div>
                     </div>
 
                     {/* Filters */}
@@ -375,13 +433,13 @@ export default function TasksPage() {
                                                         />
                                                     </div>
                                                     <div>
-                                                        <label className="text-xs font-semibold text-slate-500 mb-1 block">תאריך יצירה</label>
-                                                        <input 
-                                                            type="datetime-local"
-                                                            value={toDatetimeLocal(editForm.createdAt)}
-                                                            onChange={e => setEditForm({...editForm, createdAt: e.target.value})}
-                                                            disabled={!canEditFullTask}
-                                                            className={`w-full bg-slate-50 dark:bg-zinc-950 border border-slate-200 dark:border-zinc-800 rounded-lg p-2 text-[13px] outline-none focus:ring-2 focus:ring-indigo-500 ${!canEditFullTask ? 'opacity-70 cursor-not-allowed' : ''}`}
+                                                        <label className="text-xs font-semibold text-slate-500 mb-1 block">לקוח</label>
+                                                        <ClientSelector 
+                                                            value={editForm.clientName || ''}
+                                                            onChange={val => setEditForm({...editForm, clientName: val})}
+                                                            readOnly={!canEditFullTask}
+                                                            placeholder="בחר לקוח..."
+                                                            className={`bg-slate-50 dark:bg-zinc-950 text-[13px] ${!canEditFullTask ? 'opacity-70 cursor-not-allowed' : ''}`}
                                                         />
                                                     </div>
                                                 </div>
@@ -439,18 +497,36 @@ export default function TasksPage() {
                                             initial={{ opacity: 0, scale: 0.95 }}
                                             animate={{ opacity: 1, scale: 1 }}
                                             exit={{ opacity: 0, scale: 0.95 }}
-                                            className={cardClasses}
+                                            className={`${cardClasses} ${isSelectionMode ? 'cursor-pointer' : ''} ${isSelectionMode && selectedTasks.includes(taskItem.id!) ? 'ring-2 ring-indigo-500 dark:ring-indigo-400' : ''}`}
+                                            onClick={() => {
+                                                if (isSelectionMode && taskItem.id) {
+                                                    setSelectedTasks(prev => 
+                                                        prev.includes(taskItem.id!) 
+                                                            ? prev.filter(id => id !== taskItem.id)
+                                                            : [...prev, taskItem.id!]
+                                                    );
+                                                }
+                                            }}
                                         >
-                                            <div className="absolute top-4 ltr:right-4 rtl:left-4 flex items-center opacity-0 group-hover:opacity-100 transition-opacity gap-1">
-                                                {(canEditFullTask || isAssignee) && (
-                                                    <button 
-                                                        onClick={() => handleStartEdit(taskItem)}
-                                                        className="p-1.5 text-indigo-400 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-500/10 rounded-lg transition-colors outline-none"
-                                                        title={canEditFullTask ? "ערוך משימה" : "צפה בפרטי משימה והערות"}
-                                                    >
-                                                        <Edit2 className="w-4 h-4" />
-                                                    </button>
-                                                )}
+                                            {isSelectionMode && (
+                                                <div className="absolute top-4 rtl:left-4 ltr:right-4 z-10 text-indigo-600">
+                                                    <div className={`w-5 h-5 rounded flex items-center justify-center transition-colors ${selectedTasks.includes(taskItem.id!) ? 'bg-indigo-600 border border-indigo-600 text-white' : 'border border-slate-300 dark:border-zinc-600 bg-white dark:bg-zinc-900'}`}>
+                                                        {selectedTasks.includes(taskItem.id!) && <CheckCircle2 className="w-3.5 h-3.5 stroke-[3]" />}
+                                                    </div>
+                                                </div>
+                                            )}
+
+                                            {!isSelectionMode && (
+                                              <div className="absolute top-4 ltr:right-4 rtl:left-4 flex items-center opacity-0 group-hover:opacity-100 transition-opacity gap-1">
+                                                  {(canEditFullTask || isAssignee) && (
+                                                      <button 
+                                                          onClick={() => handleStartEdit(taskItem)}
+                                                          className="p-1.5 text-indigo-400 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-500/10 rounded-lg transition-colors outline-none"
+                                                          title={canEditFullTask ? "ערוך משימה" : "צפה בפרטי משימה והערות"}
+                                                      >
+                                                          <Edit2 className="w-4 h-4" />
+                                                      </button>
+                                                  )}
                                                 {isAdmin && (
                                                     <button 
                                                         onClick={() => handleDeleteTask(taskItem.id!)}
@@ -460,7 +536,8 @@ export default function TasksPage() {
                                                         <Trash2 className="w-4 h-4" />
                                                     </button>
                                                 )}
-                                            </div>
+                                              </div>
+                                            )}
 
                                             <div className="flex items-start gap-3.5 mb-4 ltr:pr-20 rtl:pl-20">
                                                 <button 

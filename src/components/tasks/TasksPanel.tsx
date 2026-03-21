@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Save, CheckCircle2, Clock, User, Sparkles, Loader2, AlertCircle, Circle, Trash2 } from 'lucide-react';
+import { X, Save, CheckCircle2, Clock, User, Sparkles, Loader2, AlertCircle, Circle, Trash2, Info } from 'lucide-react';
 import { useTranslation } from '@/lib/contexts/LanguageContext';
 import { Task } from '@/lib/types/task';
 import { collection, addDoc, query, where, onSnapshot, doc, updateDoc, deleteDoc, getCountFromServer } from 'firebase/firestore';
@@ -31,6 +31,7 @@ export default function TasksPanel({ isOpen, onClose, draftId, content, metadata
     const [isExtracting, setIsExtracting] = useState(false);
     const [isSaving, setIsSaving] = useState(false);
     const [error, setError] = useState('');
+    const [infoMsg, setInfoMsg] = useState('');
 
     useEffect(() => {
         if (!isOpen || !draftId) return;
@@ -43,7 +44,9 @@ export default function TasksPanel({ isOpen, onClose, draftId, content, metadata
         const unsubscribe = onSnapshot(q, (snapshot) => {
             const results: Task[] = [];
             snapshot.forEach((d) => {
-                results.push({ id: d.id, ...d.data() } as Task);
+                const data = d.data();
+                if (data.isDeleted === true) return;
+                results.push({ id: d.id, ...data } as Task);
             });
             // Sort client-side by createdAt descending
             results.sort((a, b) => {
@@ -62,6 +65,7 @@ export default function TasksPanel({ isOpen, onClose, draftId, content, metadata
         if (!isOpen) {
             setExtractedTasks([]);
             setError('');
+            setInfoMsg('');
         }
     }, [isOpen]);
 
@@ -73,6 +77,7 @@ export default function TasksPanel({ isOpen, onClose, draftId, content, metadata
 
         setIsExtracting(true);
         setError('');
+        setInfoMsg('');
         setExtractedTasks([]); // Clear past extractions
 
         try {
@@ -103,8 +108,12 @@ export default function TasksPanel({ isOpen, onClose, draftId, content, metadata
             const data = await response.json();
             if (data.tasks && Array.isArray(data.tasks)) {
                 setExtractedTasks(data.tasks);
+                if (data.tasks.length === 0) {
+                    setInfoMsg(t('tasks.noTasksFound') || 'לא נמצאו משימות או סעיפים לביצוע בטקסט.');
+                }
             } else {
                 setExtractedTasks([]);
+                setInfoMsg(t('tasks.noTasksFound') || 'לא נמצאו משימות או סעיפים לביצוע בטקסט.');
             }
         } catch (err: any) {
             console.error('Task extraction error:', err);
@@ -118,6 +127,7 @@ export default function TasksPanel({ isOpen, onClose, draftId, content, metadata
         if (extractedTasks.length === 0) return;
         setIsSaving(true);
         setError('');
+        setInfoMsg('');
 
         try {
             const snapshot = await getCountFromServer(collection(db, 'tasks'));
@@ -175,7 +185,7 @@ export default function TasksPanel({ isOpen, onClose, draftId, content, metadata
         }
         if (confirm(confirmMsg)) {
             try {
-                await deleteDoc(doc(db, 'tasks', id));
+                await updateDoc(doc(db, 'tasks', id), { isDeleted: true, deletedAt: new Date() });
             } catch (err) {
                 console.error('Failed to delete task:', err);
             }
@@ -198,6 +208,12 @@ export default function TasksPanel({ isOpen, onClose, draftId, content, metadata
             return dateString;
         }
     };
+
+    const uniqueLocalAssignees = Array.from(new Set(
+        extractedTasks
+            .map(t => t.assignee)
+            .filter((a): a is string => Boolean(a && a.trim()))
+    ));
 
     // Render helper for single task card
     const renderTaskCard = (task: any, isPreview: boolean, idx?: number) => {
@@ -229,6 +245,7 @@ export default function TasksPanel({ isOpen, onClose, draftId, content, metadata
                             <div className="w-[160px]">
                                 <AssigneeSelector
                                     value={task.assignee || ''}
+                                    localSuggestions={isPreview ? uniqueLocalAssignees : undefined}
                                     onChange={(newAssigneeObj) => {
                                         if (isPreview && idx !== undefined) {
                                             const newArr = [...extractedTasks];
@@ -334,6 +351,12 @@ export default function TasksPanel({ isOpen, onClose, draftId, content, metadata
                                     <div className="mt-3 flex items-start gap-2 p-3 bg-red-50 dark:bg-red-500/10 text-red-600 dark:text-red-400 text-xs rounded-lg border border-red-100 dark:border-red-900/30">
                                         <AlertCircle className="w-4 h-4 flex-shrink-0 mt-0.5" />
                                         <span>{error}</span>
+                                    </div>
+                                )}
+                                {infoMsg && !error && (
+                                    <div className="mt-3 flex items-start gap-2 p-3 bg-indigo-50 dark:bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 text-xs rounded-lg border border-indigo-100 dark:border-indigo-900/30">
+                                        <Info className="w-4 h-4 flex-shrink-0 mt-0.5" />
+                                        <span>{infoMsg}</span>
                                     </div>
                                 )}
                             </div>

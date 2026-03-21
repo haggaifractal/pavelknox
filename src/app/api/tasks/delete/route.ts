@@ -24,7 +24,7 @@ export async function POST(req: Request) {
 
         const taskData = taskDoc.data();
 
-        await adminDb.collection('tasks').doc(id).delete();
+        await adminDb.collection('tasks').doc(id).update({ isDeleted: true, deletedAt: new Date() });
 
         await createAuditLog({
             actionType: 'DELETE_TASK',

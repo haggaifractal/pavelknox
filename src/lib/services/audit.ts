@@ -7,8 +7,10 @@ export type AuditActionType =
     | 'DELETE_CLIENT'
     | 'BULK_DELETE_CLIENTS'
     | 'DELETE_TASK'
+    | 'DELETE_COMMENT'
     | 'BULK_CLEANUP_RAW_INPUTS'
-    | 'BULK_CLEANUP_ALL';
+    | 'BULK_CLEANUP_ALL'
+    | 'UPDATE_TOKEN_LIMIT';
 
 export interface AuditLogEntry {
     actionType: AuditActionType;

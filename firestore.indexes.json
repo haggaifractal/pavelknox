@@ -33,19 +33,5 @@
       ]
     }
   ],
-  "fieldOverrides": [
-    {
-      "collectionGroup": "knowledge_chunks",
-      "fieldPath": "embedding",
-      "indexes": [
-        {
-          "queryScope": "COLLECTION",
-          "vectorConfig": {
-            "dimension": 1536,
-            "flat": {}
-          }
-        }
-      ]
-    }
-  ]
+  "fieldOverrides": []
 }

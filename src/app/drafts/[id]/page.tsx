@@ -2,7 +2,7 @@
 
 import { use, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { doc, getDoc, updateDoc, collection, addDoc, query, where, getDocs } from 'firebase/firestore';
+import { doc, getDoc, setDoc, updateDoc, collection, addDoc, query, where, getDocs } from 'firebase/firestore';
 import { db } from '@/lib/firebase/client';
 import AuthGuard from '@/components/ui/AuthGuard';
 import { ArrowLeft, Save, CheckCircle, FileText, CheckCircle2, ChevronRight, Mic, ListTodo, AlertTriangle, ExternalLink } from 'lucide-react';
@@ -91,7 +91,7 @@ export default function DraftEditorPage({ params }: EditorPageProps) {
             if (content !== (draft as any).editedText || title !== (draft as any).title || clientName !== (draft as any).clientName || status !== (draft as any).status || tagsChanged || visibilityScope !== (draft as any).visibilityScope || depsChanged) {
                 setSaving(true);
                 try {
-                    await updateDoc(doc(db, 'drafts', draftId), {
+                    await setDoc(doc(db, 'drafts', draftId), {
                         editedText: content,
                         title: title,
                         clientName: clientName,
@@ -100,7 +100,7 @@ export default function DraftEditorPage({ params }: EditorPageProps) {
                         visibilityScope: visibilityScope,
                         departmentIds: departmentIds,
                         lastSavedAt: new Date()
-                    });
+                    }, { merge: true });
                     setDraft(prev => prev ? { ...prev, editedText: content, title: title, clientName: clientName, tags: tags, status: status, visibilityScope, departmentIds } as any : prev);
                 } catch (e) {
                     console.error("Auto-save failed", e);
@@ -128,13 +128,13 @@ export default function DraftEditorPage({ params }: EditorPageProps) {
             setSaving(true);
             const publishDate = new Date();
 
-            await updateDoc(doc(db, 'drafts', draftId), {
+            await setDoc(doc(db, 'drafts', draftId), {
                 editedText: content,
                 title: title,
                 tags: tags,
                 status: 'approved',
                 publishedAt: publishDate
-            });
+            }, { merge: true });
 
             // Clean up previous knowledge doc & vectors if this draft was an "Edit" flow
             if (draft?.sourceKnowledgeId) {
@@ -175,6 +175,9 @@ export default function DraftEditorPage({ params }: EditorPageProps) {
                             sourceId: kbDocRef.id,
                             sourceType: 'knowledge_base',
                             sourceUrl: `/knowledge/${kbDocRef.id}`,
+                            clientName: clientName,
+                            visibilityScope: visibilityScope,
+                            departmentIds: departmentIds,
                             updatedAt: new Date()
                         })
                     );
@@ -444,7 +447,7 @@ export default function DraftEditorPage({ params }: EditorPageProps) {
                                         </select>
                                     </div>
                                     <div className="w-full sm:w-[300px] z-10">
-                                        <TagSelector selectedIds={tags} onChange={setTags} placeholder="Select tags..." />
+                                        <TagSelector selectedIds={tags} onChange={setTags} placeholder={t('editor.selectTags') || 'Select tags...'} />
                                     </div>
                                 </div>
                             </div>

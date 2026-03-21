@@ -35,11 +35,42 @@ export async function PATCH(request: Request, context: { params: Promise<{ uid: 
     await adminAuth.revokeRefreshTokens(uid);
 
     // Update Firestore info if provided
+    let previousTelegramId: string | undefined;
+    const { adminDb } = await import('@/lib/firebase/admin');
+    
     if (telegramChatId !== undefined) {
-      const { adminDb } = await import('@/lib/firebase/admin');
+      const userDoc = await adminDb.collection('users').doc(uid).get();
+      previousTelegramId = userDoc.data()?.telegramChatId;
+      
       await adminDb.collection('users').doc(uid).set({
         telegramChatId: telegramChatId
       }, { merge: true });
+    }
+
+    // Audit Log Registration
+    const changes: Record<string, any> = {};
+    if (role !== undefined && role !== existingClaims.role) {
+       changes.role = { from: existingClaims.role || 'viewer', to: role };
+    }
+    if (departmentIds !== undefined) {
+       changes.departmentIds = { to: departmentIds }; // Can't easily display from/to arrays in UI compactly, just log 'to'
+    }
+    if (telegramChatId !== undefined && telegramChatId !== previousTelegramId) {
+       changes.telegramChatId = { from: previousTelegramId || '', to: telegramChatId };
+    }
+
+    if (Object.keys(changes).length > 0) {
+      await adminDb.collection('audit_logs').add({
+        action: 'UPDATE_USER',
+        entityType: 'user',
+        entityId: uid,
+        targetEmail: userRecord.email,
+        userId: auth.uid,
+        userEmail: auth.email || 'system',
+        details: `Updated metadata for user ${userRecord.email}`,
+        metadata: changes,
+        createdAt: new Date()
+      });
     }
 
     return NextResponse.json({ success: true, message: 'User updated and sessions revoked' });

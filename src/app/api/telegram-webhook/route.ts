@@ -8,6 +8,10 @@ async function processIngestionAsync(docId: string, payload: any, uid: string) {
     try {
         console.log(`Starting background processing for doc: ${docId}`);
 
+        // Fetch known clients to improve AI extraction accuracy
+        const clientsSnap = await adminDb.collection('clients').get();
+        const knownClients = clientsSnap.docs.map(d => d.data().name).filter(Boolean).join(', ');
+
         // 1. חילוץ האודיו או הטקסט
         const { voice, text } = payload.message;
         let extractedText = text || '';
@@ -52,7 +56,7 @@ async function processIngestionAsync(docId: string, payload: any, uid: string) {
         }
 
         // 2. צנזור וארגון מחדש דרך GPT
-        const extractionResult = await extractAndRedactKnowledge(extractedText);
+        const extractionResult = await extractAndRedactKnowledge(extractedText, knownClients);
         const parsedData = extractionResult.data;
         const usage = extractionResult.usage;
 
@@ -107,7 +111,13 @@ async function processIngestionAsync(docId: string, payload: any, uid: string) {
 
         // 3. יצירת טיוטה (Draft) חדשה במערכת עם הסטטוס pending
         const draftRef = await adminDb.collection('drafts').add({
-            ...parsedData,
+            title: parsedData.title || 'ללא כותרת',
+            text: parsedData.content || extractedText,
+            originalText: extractedText,
+            clientName: parsedData.clientName || null,
+            category: parsedData.category || 'other',
+            tags: parsedData.tags || [],
+            isUrgent: parsedData.isUrgent || false,
             status: 'pending',
             originalInputId: docId,
             isDuplicate,
@@ -141,7 +151,7 @@ async function processIngestionAsync(docId: string, payload: any, uid: string) {
         const botToken = process.env.TELEGRAM_BOT_TOKEN;
         if (chatId && botToken) {
             const userName = userData?.displayName || '';
-            const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'https://pavelknox.netlify.app';
+            const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'https://pavelknox-b5781.web.app';
             const draftUrl = `${baseUrl}/drafts/${draftRef.id}`;
             
             await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
@@ -149,7 +159,7 @@ async function processIngestionAsync(docId: string, payload: any, uid: string) {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     chat_id: chatId,
-                    text: `תודה ${userName}, הטיוטה נקלטה בהצלחה!\n\n[לחץ כאן למעבר לטיוטה](${draftUrl})`,
+                    text: `תודה ${userName}, המידע נשמר בהצלחה! ✅\nכותרת: [${parsedData.title || 'ללא כותרת'}](${draftUrl})`,
                     parse_mode: 'Markdown'
                 })
             }).catch(e => console.error('Failed to send Telegram confirmation:', e));
@@ -189,6 +199,22 @@ export async function POST(request: Request) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
         }
 
+        // Deduplication (Idempotency) Check using Telegram's update_id
+        if (payload.update_id) {
+            const updateIdStr = payload.update_id.toString();
+            const updateRef = adminDb.collection('telegram_updates').doc(updateIdStr);
+            try {
+                // Atomically create the document. If it already exists, this will throw an error.
+                await updateRef.create({ timestamp: new Date() });
+            } catch (err: any) {
+                if (err.code === 6 || err.message?.includes('ALREADY_EXISTS')) {
+                    console.log(`Update ${updateIdStr} already processed (concurrent). Skipping duplicate webhook.`);
+                    return NextResponse.json({ ok: true });
+                }
+                console.error("Error creating telegram_updates doc:", err);
+            }
+        }
+
         if (!payload.message) {
             return NextResponse.json({ ok: true });
         }
@@ -226,6 +252,23 @@ export async function POST(request: Request) {
 
         const hasAudio = !!voice?.file_id;
         const hasText = !!text;
+
+        // Fallback for unsupported messages
+        if (!hasAudio && !hasText) {
+            const botToken = process.env.TELEGRAM_BOT_TOKEN;
+            if (botToken) {
+                await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        chat_id: chat.id,
+                        text: `⚠️ סוג ההודעה ששלחת אינו נתמך כרגע. המערכת יודעת לקלוט הודעות טקסט או הודעות קוליות (Voice Messages) בלבד.`
+                    })
+                }).catch(e => console.error('Failed to send fallback notice', e));
+            }
+            console.warn(`Unsupported message type from chat id: ${chatIdStr}`);
+            return NextResponse.json({ ok: true });
+        }
 
         // רשומת raw התחלתית
         const rawInput = {

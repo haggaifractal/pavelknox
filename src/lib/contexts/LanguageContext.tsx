@@ -42,16 +42,25 @@ export function LanguageProvider({ children }: { children: ReactNode }) {
     };
 
     const t = (path: string, params?: Record<string, string | number>) => {
-        const [namespace, key] = path.split('.') as [keyof TranslationKey, string];
-        const dict = translations[language]?.[namespace] as any;
-        let str = dict?.[key] || path;
+        const parts = path.split('.');
+        if (parts.length < 2) return path;
+        
+        const namespace = parts[0] as keyof TranslationKey;
+        let current: any = translations[language]?.[namespace];
+        
+        for (let i = 1; i < parts.length; i++) {
+            if (current === undefined || current === null) break;
+            current = current[parts[i]];
+        }
+        
+        let str = current || path;
         
         if (params && typeof str === 'string') {
             Object.keys(params).forEach(p => {
                 str = str.replace(`{${p}}`, String(params[p]));
             });
         }
-        return str;
+        return str as string;
     };
 
     // Prevent hydration mismatch by optionally not rendering children until mounted,

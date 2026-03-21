@@ -15,7 +15,7 @@ export default function AdminDataPage() {
     const [error, setError] = useState<string | null>(null);
 
     const handleCleanup = async () => {
-        if (!confirm(`האם אתה בטוח שברצונך למחוק לצמיתות רשומות raw_inputs ישנות מ-${olderThanDays} ימים?`)) return;
+        if (!confirm(t('adminData.confirmDelete', { days: olderThanDays }))) return;
 
         setIsCleaning(true);
         setResultMessage(null);
@@ -36,11 +36,11 @@ export default function AdminDataPage() {
             });
 
             const data = await res.json();
-            if (!res.ok) throw new Error(data.error || 'שגיאה בביצוע הניקוי');
+            if (!res.ok) throw new Error(data.error || t('adminData.errorCleanup'));
 
-            setResultMessage(`ניקוי הושלם בהצלחה. נמחקו ${data.details?.raw_inputs || 0} רשומות.`);
+            setResultMessage(t('adminData.successMessage', { count: data.details?.raw_inputs || 0 }));
         } catch (err: any) {
-            setError(err.message || 'שגיאה בעת ביצוע הניקוי');
+            setError(err.message || t('adminData.errorCleanup'));
         } finally {
             setIsCleaning(false);
         }
@@ -56,10 +56,10 @@ export default function AdminDataPage() {
                         </div>
                         <div>
                             <h1 className="text-2xl font-bold text-slate-900 dark:text-zinc-100 tracking-tight">
-                                {t('common.navAdminData') || 'ניהול נתונים'}
+                                {t('adminData.title')}
                             </h1>
                             <p className="text-sm text-slate-500 dark:text-zinc-400 mt-1">
-                                סקירה וניהול מחזור חיי נתוני המערכת
+                                {t('adminData.subtitle')}
                             </p>
                         </div>
                     </div>
@@ -70,22 +70,22 @@ export default function AdminDataPage() {
                     <div className="bg-white dark:bg-zinc-900 rounded-2xl shadow-sm border border-slate-200 dark:border-zinc-800 p-6">
                         <div className="flex items-center gap-2 mb-4 text-rose-600 dark:text-rose-400">
                             <Trash2 className="w-5 h-5" />
-                            <h2 className="text-xl font-semibold">ניקוי נתוני מקור (Raw Inputs)</h2>
+                            <h2 className="text-xl font-semibold">{t('adminData.rawTitle')}</h2>
                         </div>
                         
                         <div className="mb-6 p-4 bg-amber-50 dark:bg-amber-900/20 rounded-xl border border-amber-200 dark:border-amber-800/30 flex items-start gap-3">
                             <AlertTriangle className="w-5 h-5 text-amber-600 dark:text-amber-500 mt-0.5" />
                             <p className="text-sm text-amber-800 dark:text-amber-300">
-                                פעולה זו תמחק לצמיתות רשומות <code>raw_inputs</code> ישנות מהדאטה-בייס. 
-                                רשומות אלו משמשות בדרך כלל רק לדיבאג ותקלות אחרונות. 
-                                הפעולה תירשם היטב בלוג המערכת (Audit Log).
+                                {t('adminData.rawDesc1')} <br />
+                                {t('adminData.rawDesc2')} <br />
+                                {t('adminData.rawDesc3')}
                             </p>
                         </div>
                         
                         <div className="space-y-4">
                             <div>
                                 <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
-                                    מחק רשומות ישנות מ:
+                                    {t('adminData.deleteOlderThan')}
                                 </label>
                                 <select 
                                     value={olderThanDays}
@@ -93,11 +93,11 @@ export default function AdminDataPage() {
                                     disabled={isCleaning}
                                     className="w-full sm:w-64 bg-slate-50 dark:bg-zinc-800/50 border border-slate-200 dark:border-zinc-700 text-slate-900 dark:text-zinc-100 rounded-xl px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-rose-500 focus:border-transparent transition-all disabled:opacity-50"
                                 >
-                                    <option value="7">7 ימים</option>
-                                    <option value="14">14 ימים</option>
-                                    <option value="30">30 ימים</option>
-                                    <option value="90">90 ימים</option>
-                                    <option value="180">180 ימים</option>
+                                    <option value="7">{t('adminData.daysCount', { count: 7 })}</option>
+                                    <option value="14">{t('adminData.daysCount', { count: 14 })}</option>
+                                    <option value="30">{t('adminData.daysCount', { count: 30 })}</option>
+                                    <option value="90">{t('adminData.daysCount', { count: 90 })}</option>
+                                    <option value="180">{t('adminData.daysCount', { count: 180 })}</option>
                                 </select>
                             </div>
                             
@@ -110,10 +110,10 @@ export default function AdminDataPage() {
                                 {isCleaning ? (
                                     <>
                                         <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                                        מנקה...
+                                        {t('adminData.cleaning')}
                                     </>
                                 ) : (
-                                    'בצע ניקוי'
+                                    t('adminData.btnCleanup')
                                 )}
                             </button>
                         </div>

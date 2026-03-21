@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { collection, query, orderBy, onSnapshot, addDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '@/lib/firebase/client';
 import { useAuth } from '@/lib/contexts/AuthContext';
-import { Send, User as UserIcon } from 'lucide-react';
+import { Send, User as UserIcon, Trash2, Loader2 } from 'lucide-react';
 
 const formatDate = (date: any) => {
     if (!date) return 'עכשיו';
@@ -18,6 +18,7 @@ interface Comment {
     id: string;
     text: string;
     authorName: string;
+    authorId?: string;
     authorEmail?: string;
     createdAt: any;
     isSystemEvent?: boolean;
@@ -28,10 +29,11 @@ interface TaskCommentsProps {
 }
 
 export default function TaskComments({ taskId }: TaskCommentsProps) {
-    const { user } = useAuth();
+    const { user, isAdmin } = useAuth();
     const [comments, setComments] = useState<Comment[]>([]);
     const [newComment, setNewComment] = useState('');
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const [deletingCommentId, setDeletingCommentId] = useState<string | null>(null);
 
     useEffect(() => {
         if (!taskId) return;
@@ -74,6 +76,33 @@ export default function TaskComments({ taskId }: TaskCommentsProps) {
         }
     };
 
+    const handleDelete = async (commentId: string) => {
+        if (!confirm('האם אתה בטוח שברצונך למחוק הערה זו? פעולה זו תישמר ביומן המערכת.')) return;
+        
+        setDeletingCommentId(commentId);
+        try {
+            const token = await user?.getIdToken(true);
+            const res = await fetch('/api/tasks/comments/delete', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify({ taskId, commentId })
+            });
+
+            if (!res.ok) {
+                const data = await res.json();
+                throw new Error(data.error || 'Failed to delete comment');
+            }
+        } catch (error) {
+            console.error('Error deleting comment:', error);
+            alert('שגיאה במחיקת ההערה');
+        } finally {
+            setDeletingCommentId(null);
+        }
+    };
+
     return (
         <div className="flex flex-col h-full bg-slate-50/50 dark:bg-zinc-950/50 rounded-xl border border-slate-200 dark:border-zinc-800 overflow-hidden">
             {/* Comments List */}
@@ -92,13 +121,29 @@ export default function TaskComments({ taskId }: TaskCommentsProps) {
                             )}
                             <div className={`flex flex-col ${comment.isSystemEvent ? 'items-center text-center' : 'items-start'}`}>
                                 {!comment.isSystemEvent && (
-                                    <div className="flex items-center gap-2 mb-1">
-                                        <span className="text-xs font-medium text-slate-700 dark:text-zinc-300">
-                                            {comment.authorName}
-                                        </span>
-                                        <span className="text-[10px] text-slate-400 dark:text-zinc-500">
-                                            {comment.createdAt?.toDate() ? formatDate(comment.createdAt.toDate()) : 'עכשיו'}
-                                        </span>
+                                    <div className="flex items-center gap-2 mb-1 w-full justify-between">
+                                        <div className="flex items-center gap-2">
+                                            <span className="text-xs font-medium text-slate-700 dark:text-zinc-300">
+                                                {comment.authorName}
+                                            </span>
+                                            <span className="text-[10px] text-slate-400 dark:text-zinc-500">
+                                                {comment.createdAt?.toDate() ? formatDate(comment.createdAt.toDate()) : 'עכשיו'}
+                                            </span>
+                                        </div>
+                                        {(isAdmin || (user && comment.authorId === user.uid)) && (
+                                            <button
+                                                onClick={() => handleDelete(comment.id)}
+                                                disabled={deletingCommentId === comment.id}
+                                                className="text-slate-400 hover:text-red-500 dark:text-zinc-500 dark:hover:text-red-400 transition-colors mr-2"
+                                                title="מחק הערה"
+                                            >
+                                                {deletingCommentId === comment.id ? (
+                                                    <Loader2 className="w-3 h-3 animate-spin" />
+                                                ) : (
+                                                    <Trash2 className="w-3 h-3" />
+                                                )}
+                                            </button>
+                                        )}
                                     </div>
                                 )}
                                 <div className={`text-sm ${

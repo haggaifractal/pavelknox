@@ -12,7 +12,7 @@ import { useTranslation } from '@/lib/contexts/LanguageContext';
 import { where } from 'firebase/firestore';
 
 export default function KnowledgeBasePage() {
-    const { user, permissions } = useAuth();
+    const { user, permissions, isAdmin, isSuperAdmin } = useAuth();
     const router = useRouter();
     const [documents, setDocuments] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
@@ -41,7 +41,22 @@ export default function KnowledgeBasePage() {
         );
         
         const unsubscribePending = onSnapshot(qPending, (snap) => {
-            setPendingCount(snap.size);
+            let count = 0;
+            const userDeptIds = (user as any)?.departmentIds || [];
+            
+            snap.forEach((doc) => {
+                const data = doc.data();
+                if (data.isDeleted === true) return;
+                
+                const isGlobal = !data.visibilityScope || data.visibilityScope === 'global';
+                const hasIntersection = data.departmentIds?.some((id: string) => userDeptIds.includes(id));
+                const canView = isAdmin || isSuperAdmin || isGlobal || hasIntersection;
+
+                if (canView) {
+                    count++;
+                }
+            });
+            setPendingCount(count);
         }, (error) => {
             console.error("Failed to count pending drafts:", error);
         });
@@ -49,7 +64,9 @@ export default function KnowledgeBasePage() {
         const unsubscribe = onSnapshot(q, (snapshot) => {
             const results: any[] = [];
             snapshot.forEach((doc) => {
-                results.push({ id: doc.id, ...doc.data() });
+                const data = doc.data();
+                if (data.isDeleted === true) return;
+                results.push({ id: doc.id, ...data });
             });
             setDocuments(results);
             setLoading(false);
