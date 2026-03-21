@@ -26,17 +26,55 @@ async function processIngestionAsync(docId: string, payload: any) {
 
         console.log(`Successfully extracted raw text for doc: ${docId}, proceeding to GPT parsing`);
 
+        const chatIdStr = payload?.message?.chat?.id?.toString() || 'unknown';
+
+        // 1.5 Security Limits Check
+        const adminStatsRef = adminDb.collection('telegram_admins').doc(chatIdStr);
+        const adminStatsDoc = await adminStatsRef.get();
+        const adminStats = adminStatsDoc.exists ? adminStatsDoc.data() : null;
+        const currentTokens = adminStats?.tokensUsedThisMonth || 0;
+        const maxTokens = adminStats?.monthlyLimit || 5000000; // 5M tokens default
+
+        if (currentTokens >= maxTokens) {
+             const botToken = process.env.TELEGRAM_BOT_TOKEN;
+             if (chatIdStr !== 'unknown' && botToken) {
+                 await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
+                     method: 'POST',
+                     headers: { 'Content-Type': 'application/json' },
+                     body: JSON.stringify({
+                         chat_id: chatIdStr,
+                         text: `❌ הגעת למגבלת האבטחה החודשית של הבוט (${maxTokens} טוקנים). לא ניתן לקלוט מידע נוסף החודש.`
+                     })
+                 });
+             }
+             console.error(`Admin ${chatIdStr} reached high security token limit.`);
+             return; // Abort processing
+        }
+
         // 2. צנזור וארגון מחדש דרך GPT
-        const parsedData = await extractAndRedactKnowledge(extractedText);
+        const extractionResult = await extractAndRedactKnowledge(extractedText);
+        const parsedData = extractionResult.data;
+        const usage = extractionResult.usage;
+
+        const totalTokens = usage?.total_tokens || 0;
+        const { FieldValue } = await import('firebase-admin/firestore');
+        
+        await adminStatsRef.set({
+            tokensUsedThisMonth: FieldValue.increment(totalTokens),
+            lifetimeTokensUsed: FieldValue.increment(totalTokens),
+            lastActivityDate: new Date()
+        }, { merge: true });
 
         // Audit log for AI interaction
-        const auditChatId = payload?.message?.chat?.id?.toString() || 'unknown';
         await adminDb.collection('ai_chat_logs').add({
             timestamp: new Date(),
             query: extractedText,
             response: JSON.stringify(parsedData),
             source: 'Telegram',
-            userId: auditChatId
+            userId: chatIdStr,
+            promptTokens: usage?.prompt_tokens || 0,
+            completionTokens: usage?.completion_tokens || 0,
+            totalTokens: totalTokens
         }).catch(err => console.error('Failed to log Telegram interaction:', err));
 
         // 2.5 Duplicate Detection via Vector Search

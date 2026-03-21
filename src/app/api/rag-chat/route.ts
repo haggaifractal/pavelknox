@@ -3,7 +3,7 @@ import { adminDb } from '@/lib/firebase/admin';
 import { FieldValue } from 'firebase-admin/firestore';
 import { generateEmbedding } from '@/lib/ai/embeddings';
 import { verifyAuth } from '@/lib/firebase/serverAuth';
-import { OpenAI } from 'openai';
+import { OpenAI, AzureOpenAI } from 'openai';
 
 // Define the tools for Function Calling
 const tools: OpenAI.Chat.Completions.ChatCompletionTool[] = [
@@ -47,24 +47,41 @@ const tools: OpenAI.Chat.Completions.ChatCompletionTool[] = [
 ];
 
 export async function POST(req: Request) {
+  let debugStep = 'init';
   try {
     const auth = await verifyAuth(req);
     if (!auth) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const endpoint = process.env.AZURE_OPENAI_ENDPOINT?.replace(/\/$/, '') || '';
-    const deployment = process.env.AZURE_OPENAI_CHAT_DEPLOYMENT || 'gpt-4o';
+    // Fetch User Quota Data
+    const userDocRef = adminDb.collection('users').doc(auth.uid);
+    const userDoc = await userDocRef.get();
+    const userData = userDoc.data() || {};
     
-    const ai = new OpenAI({
-      apiKey: process.env.AZURE_OPENAI_API_KEY,
-      baseURL: `${endpoint}/openai/deployments/${deployment}`, 
-      defaultQuery: { 'api-version': process.env.AZURE_OPENAI_API_VERSION! },
-      defaultHeaders: { 'api-key': process.env.AZURE_OPENAI_API_KEY! },
+    // Default config fallback: 50,000 tokens
+    const tokensUsedThisMonth = userData.tokensUsedThisMonth || 0;
+    const monthlyTokenLimit = userData.monthlyTokenLimit !== undefined ? userData.monthlyTokenLimit : 50000;
+
+    if (tokensUsedThisMonth >= monthlyTokenLimit) {
+        return NextResponse.json({ 
+            success: false, 
+            error: 'הגעת למכסת ה-AI החודשית שלך. אנא פנה למנהל המערכת להגדלת המכסה.',
+            limitReached: true 
+        }, { status: 403 });
+    }
+
+    debugStep = 'azure_init';
+    const ai = new AzureOpenAI({
+      apiKey: process.env.AZURE_OPENAI_API_KEY || '',
+      endpoint: process.env.AZURE_OPENAI_ENDPOINT || '',
+      apiVersion: process.env.AZURE_OPENAI_API_VERSION || '2024-08-01-preview',
+      deployment: process.env.AZURE_OPENAI_CHAT_DEPLOYMENT || 'gpt-4o',
     });
 
     let query, history;
     try {
+        debugStep = 'parse_body';
         const body = await req.json();
         query = body.query;
         history = body.history || [];
@@ -98,13 +115,19 @@ SYSTEM CONTEXT (Entity Dictionary):
 When a user asks about a partial name (e.g., "חגי"), use this dictionary to resolve it to the full name (e.g., "חגי יחיאל") BEFORE calling tools.
 
 CRITICAL RULES FOR FINAL ANSWER:
+0. THE GATEKEEPER RULE (PRE-SEARCH): If the user asks for "everything", "all tasks", "all general info", or if their query is extremely broad without specifying a specific client, employee, or topic, YOU MUST REFUSE TO SEARCH. Do NOT call 'search_knowledge_base' or 'get_open_tasks'. Instead, politely ask them to be more specific (e.g., "I have a lot of data. Could you please specify a client or topic to help me narrow it down?").
 1. STRICT KNOWLEDGE BINDING: If the answer is NOT strictly contained within the tool results, you MUST say "I don't know based on the provided data." DO NOT hallucinate.
 2. EXTREMELY CLEAR FORMATTING: Use Markdown headings (\`### [Client/Topic]\`), **bold text**, bullet points, and tables. 
-3. PRECISE CITATIONS: When using 'search_knowledge_base', you will receive a list of sources. You MUST explicitly cite ONLY the exact source URLs that you actually used to form your answer. Format citations as Markdown links at the end of the sentence or block: \`[Source Title](/knowledge/1234abc)\`. Do not cite sources you did not use.`
+3. PRECISE CITATIONS: When using 'search_knowledge_base', you will receive a list of sources. You MUST explicitly cite ONLY the exact source URLs that you actually used to form your answer. Format citations as Markdown links at the end of the sentence or block: \`[Source Title](/knowledge/1234abc)\`. Do not cite sources you did not use.
+4. OVERLOAD PROTECTION: If a tool returns a 'SYSTEM NOTICE' about truncated data (e.g. over 5 tasks), you MUST inform the user naturally, summarize the few you received, and ask them to refine their search (e.g., 'To see the rest, please specify a client or assignee'). Do NOT invent the missing data.`
     };
 
     const messages = [systemInstruction, ...history, { role: 'user', content: query }];
 
+    let totalPromptTokens = 0;
+    let totalCompletionTokens = 0;
+
+    debugStep = 'llm_call_1';
     // 1st LLM Call: Let AI decide which tool to use
     let response = await ai.chat.completions.create({
       model: "gpt-4o",
@@ -113,6 +136,11 @@ CRITICAL RULES FOR FINAL ANSWER:
       tool_choice: "auto",
       temperature: 0.1,
     });
+
+    if (response.usage) {
+        totalPromptTokens += response.usage.prompt_tokens;
+        totalCompletionTokens += response.usage.completion_tokens;
+    }
 
     const responseMessage = response.choices[0].message;
     messages.push(responseMessage as any);
@@ -123,9 +151,10 @@ CRITICAL RULES FOR FINAL ANSWER:
 
     // Check if AI wanted to call a function
     if (responseMessage.tool_calls) {
+        debugStep = 'process_tools';
         for (const toolCall of responseMessage.tool_calls) {
             const functionName = (toolCall as any).function.name;
-            const functionArgs = JSON.parse((toolCall as any).function.arguments);
+            const functionArgs = JSON.parse((toolCall as any).function.arguments || '{}');
             let functionResult = "";
 
             if (functionName === "search_knowledge_base") {
@@ -133,7 +162,7 @@ CRITICAL RULES FOR FINAL ANSWER:
                 const queryEmbedding = await generateEmbedding(searchQuery);
                 const coll = adminDb.collection("knowledge_chunks");
                 const snapshot = await coll.findNearest('embedding', FieldValue.vector(queryEmbedding), {
-                    limit: 10,
+                    limit: 5,
                     distanceMeasure: 'COSINE'
                 }).get();
 
@@ -144,6 +173,8 @@ CRITICAL RULES FOR FINAL ANSWER:
                     `[Source URL: ${doc.sourceUrl || '#'}] | Title: ${doc.title || 'Unknown'}\nContent: ${doc.content}`
                 ).join('\n\n');
                 
+                functionResult += `\n\n[SYSTEM NOTICE: Displaying the top 5 most relevant knowledge snippets to save context. If the user requires other specific info, ask them for a stronger keyword filter.]`;
+
                 contextUsed += matchedDocs.length;
             } 
             else if (functionName === "get_open_tasks") {
@@ -168,7 +199,10 @@ CRITICAL RULES FOR FINAL ANSWER:
                 if (matchedTasks.length === 0) {
                     functionResult = "No open tasks found matching the criteria.";
                 } else {
-                    functionResult = JSON.stringify(matchedTasks.map((t: any) => ({
+                    const totalTasks = matchedTasks.length;
+                    const slicedTasks = matchedTasks.slice(0, 5);
+
+                    functionResult = JSON.stringify(slicedTasks.map((t: any) => ({
                         id: t.id,
                         description: t.description,
                         client: t.clientName,
@@ -176,9 +210,14 @@ CRITICAL RULES FOR FINAL ANSWER:
                         deadline: t.deadline,
                         source: t.sourceUrl || `/drafts/${t.sourceId}`
                     })), null, 2);
-                    contextUsed += matchedTasks.length;
+
+                    if (totalTasks > 5) {
+                        functionResult += `\n\n[SYSTEM NOTICE: Found ${totalTasks} tasks but only providing the top 5 to save memory. The remaining ${totalTasks - 5} tasks are hidden. Explicitly ask the user to filter down by clientName or assignee to see the specific ones they need.]`;
+                    }
+
+                    contextUsed += slicedTasks.length;
                     
-                    matchedTasks.forEach((t: any) => {
+                    slicedTasks.forEach((t: any) => {
                         utilizedSources.push({
                             title: `Task: ${t.description?.substring(0, 30)}...`,
                             url: t.sourceUrl || `/drafts/${t.sourceId}`
@@ -195,12 +234,18 @@ CRITICAL RULES FOR FINAL ANSWER:
             });
         }
 
+        debugStep = 'llm_call_2';
         // 2nd LLM Call: Generate final answer based on tool outputs
         const finalResponse = await ai.chat.completions.create({
             model: "gpt-4o",
             messages: messages as any,
             temperature: 0.1,
         });
+
+        if (finalResponse.usage) {
+            totalPromptTokens += finalResponse.usage.prompt_tokens;
+            totalCompletionTokens += finalResponse.usage.completion_tokens;
+        }
 
         finalAnswer = finalResponse.choices[0].message.content || "";
     } else {
@@ -231,15 +276,48 @@ CRITICAL RULES FOR FINAL ANSWER:
     }
     const finalSourcesList = Object.values(uniqueSourcesObj);
 
-    // Audit log
-    await adminDb.collection('ai_chat_logs').add({
+    const totalTokensUsed = totalPromptTokens + totalCompletionTokens;
+
+    // Audit log and Quota Update
+    const batch = adminDb.batch();
+    
+    debugStep = 'audit_quota_log';
+    // Update user quota
+    const modelName = process.env.AZURE_OPENAI_CHAT_DEPLOYMENT || 'gpt-4o';
+    let currCostUSD = 0;
+    if (modelName.toLowerCase().includes('mini')) {
+        currCostUSD = (totalPromptTokens * 0.150 / 1000000) + (totalCompletionTokens * 0.600 / 1000000);
+    } else {
+        currCostUSD = (totalPromptTokens * 2.50 / 1000000) + (totalCompletionTokens * 10.00 / 1000000);
+    }
+
+    const quotaUpdateData: any = {
+        tokensUsedThisMonth: FieldValue.increment(totalTokensUsed || 0),
+        lifetimeTokensUsed: FieldValue.increment(totalTokensUsed || 0),
+        costUSD: FieldValue.increment(currCostUSD),
+        modelsUsed: FieldValue.arrayUnion(modelName),
+        lastActivityDate: new Date()
+    };
+    if (auth.email) quotaUpdateData.email = auth.email;
+    if (auth.name) quotaUpdateData.displayName = auth.name;
+
+    batch.set(userDocRef, quotaUpdateData, { merge: true });
+
+    // Add audit log
+    const logRef = adminDb.collection('ai_chat_logs').doc();
+    batch.set(logRef, {
         timestamp: new Date(),
         query: query,
         response: finalAnswer,
         source: 'Web',
         userId: auth.uid,
         contextUsed: contextUsed,
-    }).catch(err => console.error('Failed to log chat:', err));
+        promptTokens: totalPromptTokens,
+        completionTokens: totalCompletionTokens,
+        totalTokens: totalTokensUsed
+    });
+
+    await batch.commit().catch(err => console.error('Failed to log chat and update quota:', err));
 
     return NextResponse.json({ 
       success: true, 
@@ -251,7 +329,7 @@ CRITICAL RULES FOR FINAL ANSWER:
   } catch (error: any) {
     console.log('RAG API Error Message:', error?.message || String(error));
     
-    const errorMsg = error?.message || '';
+    const errorMsg = `[Step: ${debugStep}] ${error?.message || ''}`;
     if (errorMsg.includes('index') && errorMsg.includes('https://console.firebase.google.com')) {
         const urlMatch = errorMsg.match(/https:\/\/console\.firebase\.google\.com[^\s]*/);
         const indexUrl = urlMatch ? urlMatch[0] : '';

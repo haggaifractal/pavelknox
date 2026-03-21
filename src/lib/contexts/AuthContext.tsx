@@ -32,9 +32,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     useEffect(() => {
         const unsubscribe = onAuthStateChanged(auth, async (user) => {
             if (user) {
+                setLoading(true);
                 try {
-                    // Force refresh to ensure we have the latest custom claims
-                    const tokenResult = await user.getIdTokenResult(true);
+                    // Get token result from cache for instant load (avoids blocking network call)
+                    const tokenResult = await user.getIdTokenResult();
                     const userRole = (tokenResult.claims.role as UserRole) || 'viewer';
                     setRole(userRole);
                 } catch (error) {

@@ -6,6 +6,7 @@ export const en: typeof he = {
     navClients: 'Clients',
     navTags: 'Tags',
     navAdminData: 'Admin Data',
+    navAdminTokens: 'Token Quotas',
     loading: 'Loading...',
     error: 'Error',
     success: 'Success',

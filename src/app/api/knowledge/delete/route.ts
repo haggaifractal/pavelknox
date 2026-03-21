@@ -38,9 +38,21 @@ export async function POST(req: Request) {
       await batch.commit();
     }
 
+    // 3. Delete all associated tasks
+    const tasksSnapshot = await adminDb.collection('tasks').where('sourceId', '==', id).get();
+    let deletedTasksCount = 0;
+    if (!tasksSnapshot.empty) {
+      const batch = adminDb.batch();
+      tasksSnapshot.docs.forEach((doc) => {
+        batch.delete(doc.ref);
+      });
+      await batch.commit();
+      deletedTasksCount = tasksSnapshot.size;
+    }
+
     return NextResponse.json({ 
       success: true, 
-      message: `Successfully deleted document and ${chunksSnapshot.size} associated chunks.`
+      message: `Successfully deleted document, ${chunksSnapshot?.size || 0} chunks, and ${deletedTasksCount} tasks.`
     });
 
   } catch (error: any) {

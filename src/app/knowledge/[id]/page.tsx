@@ -3,7 +3,7 @@
 import AuthGuard from '@/components/ui/AuthGuard';
 import { use, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { doc, getDoc, collection, query, onSnapshot, addDoc } from 'firebase/firestore';
+import { doc, getDoc, collection, query, onSnapshot, addDoc, getDocs, where } from 'firebase/firestore';
 import { db } from '@/lib/firebase/client';
 import { ArrowLeft, Database, Calendar, FileCheck2, User, ChevronRight, Edit2, Trash2, Loader2 } from 'lucide-react';
 import { motion } from 'framer-motion';
@@ -53,12 +53,27 @@ export default function KnowledgeViewPage({ params }: KnowledgeViewProps) {
     };
 
     const handleDelete = async () => {
-        if (!confirm(t('knowledgeBase.confirmDelete') || 'האם אתה בטוח שברצונך למחוק מסמך זה? המחיקה תסיר גם את הלמידה של ה-AI.')) {
-            setIsDeleting(false);
-            return;
-        }
-        setIsDeleting(true);
         try {
+            const tasksQuery = query(collection(db, 'tasks'), where('sourceId', '==', document.id));
+            const tasksSnap = await getDocs(tasksQuery);
+            
+            if (!tasksSnap.empty) {
+                const openTasks = tasksSnap.docs.filter(doc => {
+                    const status = doc.data().status;
+                    return status === 'pending' || status === 'in_progress';
+                });
+                
+                if (openTasks.length > 0) {
+                    const confirmMsg = t('knowledgeBase.warnTasksDelete') || `⚠️ שים לב: למסמך זה מקושרות ${openTasks.length} משימות פעילות. מחיקת המסמך תמחק גם את המשימות הללו. האם אתה בטוח שברצונך למחוק?`;
+                    if (!confirm(confirmMsg)) return;
+                } else {
+                    if (!confirm(t('knowledgeBase.confirmDelete') || 'האם אתה בטוח שברצונך למחוק מסמך זה? המחיקה תסיר גם את הלמידה של ה-AI.')) return;
+                }
+            } else {
+                if (!confirm(t('knowledgeBase.confirmDelete') || 'האם אתה בטוח שברצונך למחוק מסמך זה? המחיקה תסיר גם את הלמידה של ה-AI.')) return;
+            }
+
+            setIsDeleting(true);
             const token = await user?.getIdToken(true);
             const res = await fetch('/api/knowledge/delete', {
                 method: 'POST',

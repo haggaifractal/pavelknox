@@ -2,7 +2,7 @@
 
 import { use, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { doc, getDoc, updateDoc, collection, addDoc } from 'firebase/firestore';
+import { doc, getDoc, updateDoc, collection, addDoc, query, where, getDocs } from 'firebase/firestore';
 import { db } from '@/lib/firebase/client';
 import AuthGuard from '@/components/ui/AuthGuard';
 import { ArrowLeft, Save, CheckCircle, FileText, CheckCircle2, ChevronRight, Mic, ListTodo, AlertTriangle, ExternalLink } from 'lucide-react';
@@ -151,6 +151,26 @@ export default function DraftEditorPage({ params }: EditorPageProps) {
                 sourceDraftId: draftId,
                 publishedAt: publishDate
             });
+
+            // Update associated tasks to point to the new knowledge base document
+            try {
+                const tasksQuery = query(collection(db, 'tasks'), where('sourceId', '==', draftId));
+                const tasksSnap = await getDocs(tasksQuery);
+                if (!tasksSnap.empty) {
+                    const batchPromises = tasksSnap.docs.map(taskDoc => 
+                        updateDoc(doc(db, 'tasks', taskDoc.id), {
+                            sourceId: kbDocRef.id,
+                            sourceType: 'knowledge_base',
+                            sourceUrl: `/knowledge/${kbDocRef.id}`,
+                            updatedAt: new Date()
+                        })
+                    );
+                    await Promise.all(batchPromises);
+                    console.log(`Updated ${tasksSnap.size} tasks to point to new knowledge base document.`);
+                }
+            } catch (e) {
+                console.error('Failed to update tasks source info', e);
+            }
 
             // Auto-ingest into RAG Vector DB
             try {

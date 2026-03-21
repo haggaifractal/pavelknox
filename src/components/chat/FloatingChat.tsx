@@ -2,7 +2,7 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { MessageCircle, X, Send, Bot, User, Loader2 } from 'lucide-react';
+import { MessageCircle, X, Send, Bot, User, Loader2, Plus } from 'lucide-react';
 import { parseMarkdown } from '@/lib/utils';
 import { useAuth } from '@/lib/contexts/AuthContext';
 
@@ -17,21 +17,58 @@ export function FloatingChat() {
   const { user } = useAuth();
   const [isOpen, setIsOpen] = useState(false);
   const [query, setQuery] = useState('');
-  const [messages, setMessages] = useState<Message[]>([
-    {
-      id: 'welcome',
-      role: 'assistant',
-      content: 'היי! אני סוכן הידע המגובה ב-RAG. שאל אותי כל שאלה המבוססת על המאגר.',
-    }
-  ]);
+  const welcomeMessage: Message = {
+    id: 'welcome',
+    role: 'assistant',
+    content: 'היי! אני סוכן הידע המגובה ב-RAG. שאל אותי כל שאלה המבוססת על המאגר.',
+  };
+  
+  const [messages, setMessages] = useState<Message[]>([welcomeMessage]);
   const [isLoading, setIsLoading] = useState(false);
+  const [isInitialized, setIsInitialized] = useState(false);
+
+  useEffect(() => {
+    // Load local storage on mount
+    const saved = localStorage.getItem('pk_chat_history');
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          setMessages(parsed);
+        }
+      } catch (e) {
+        console.error("Failed to parse chat history", e);
+      }
+    }
+    setIsInitialized(true);
+  }, []);
+
+  useEffect(() => {
+    // Save to local storage when messages change, but only after initial load
+    if (isInitialized) {
+      localStorage.setItem('pk_chat_history', JSON.stringify(messages));
+    }
+  }, [messages, isInitialized]);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
+
+  useEffect(() => {
+    if (isOpen && inputRef.current) {
+      setTimeout(() => inputRef.current?.focus(), 100);
+    }
+  }, [isOpen]);
 
   useEffect(() => {
     if (messagesEndRef.current) {
       messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
     }
   }, [messages, isOpen]);
+
+  useEffect(() => {
+    const handleOpenChat = () => setIsOpen(true);
+    window.addEventListener('open-ai-chat', handleOpenChat);
+    return () => window.removeEventListener('open-ai-chat', handleOpenChat);
+  }, []);
 
   // Don't render chat for unauthenticated users
   if (!user) return null;
@@ -131,13 +168,26 @@ export function FloatingChat() {
                   <p className="text-indigo-100 text-xs opacity-90">RAG Knowledge Base</p>
                 </div>
               </div>
-              <button 
-                onClick={() => setIsOpen(false)}
-                className="p-2 bg-white/10 hover:bg-white/20 rounded-full transition-colors"
-                aria-label="Close chat"
-              >
-                <X className="w-4 h-4" />
-              </button>
+              <div className="flex items-center gap-1">
+                <button 
+                  onClick={() => {
+                    setMessages([welcomeMessage]);
+                    localStorage.removeItem('pk_chat_history');
+                  }}
+                  className="p-2 bg-white/10 hover:bg-white/20 rounded-full transition-colors"
+                  aria-label="New chat"
+                  title="שיחה חדשה"
+                >
+                  <Plus className="w-4 h-4" />
+                </button>
+                <button 
+                  onClick={() => setIsOpen(false)}
+                  className="p-2 bg-white/10 hover:bg-white/20 rounded-full transition-colors"
+                  aria-label="Close chat"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
             </div>
 
             {/* Messages Area */}
@@ -215,6 +265,7 @@ export function FloatingChat() {
             <div className="p-4 bg-white dark:bg-zinc-900 border-t border-slate-200 dark:border-zinc-800">
               <form onSubmit={handleSend} className="relative flex items-end gap-2">
                 <textarea
+                  ref={inputRef}
                   value={query}
                   onChange={(e) => setQuery(e.target.value)}
                   onKeyDown={(e) => {

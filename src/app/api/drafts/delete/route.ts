@@ -39,6 +39,18 @@ export async function POST(req: Request) {
         // Delete draft itself
         await adminDb.collection('drafts').doc(id).delete();
 
+        // Cascade delete associated tasks
+        const tasksSnapshot = await adminDb.collection('tasks').where('sourceId', '==', id).get();
+        let deletedTasksCount = 0;
+        if (!tasksSnapshot.empty) {
+            const batch = adminDb.batch();
+            tasksSnapshot.docs.forEach(doc => {
+                batch.delete(doc.ref);
+            });
+            await batch.commit();
+            deletedTasksCount = tasksSnapshot.size;
+        }
+
         // Audit Log
         await createAuditLog({
             actionType: 'DELETE_DRAFT',
@@ -47,6 +59,7 @@ export async function POST(req: Request) {
             targetId: id,
             details: {
                 deletedAssociatedRawInput: deletedRawInput,
+                deletedTasksCount,
                 originalInputId: draftData?.originalInputId || null,
                 title: draftData?.title || draftData?.clientName || 'Untitled'
             }

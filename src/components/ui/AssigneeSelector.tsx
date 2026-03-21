@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useRef } from 'react';
-import { User, Loader2, Check, Plus } from 'lucide-react';
+import { User, Loader2, Check, Plus, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { auth } from '@/lib/firebase/client';
 import { useAuth } from '@/lib/contexts/AuthContext';
@@ -65,6 +65,33 @@ export default function AssigneeSelector({ value, onChange, placeholder = 'Selec
         return () => document.removeEventListener('mousedown', handleClickOutside);
     }, []);
 
+    const handleDeleteCustom = async (e: React.MouseEvent, u: {uid: string, displayName: string}) => {
+        e.stopPropagation();
+        if (!confirm(`האם לנסות למחוק את האחראי הזמני "${u.displayName}"? מחיקה תתאפשר רק אם אין לו משימות משויכות.`)) return;
+        
+        try {
+            const token = await auth.currentUser?.getIdToken();
+            const res = await fetch('/api/users/custom/delete', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                body: JSON.stringify({ displayName: u.displayName })
+            });
+            const data = await res.json();
+            if (data.error) {
+                alert(data.error);
+            } else {
+                setUsers(prev => prev.filter(user => user.uid !== u.uid));
+                if (value === u.displayName) {
+                    onChange('');
+                }
+                alert(`האחראי "${u.displayName}" נמחק בהצלחה.`);
+            }
+        } catch (error) {
+            console.error('Failed to delete custom user', error);
+            alert('שגיאה במחיקת אחראי');
+        }
+    };
+
     const filteredUsers = users.filter(u => u.displayName.toLowerCase().includes(search.toLowerCase()));
     const exactMatch = users.find(u => u.displayName.toLowerCase() === search.trim().toLowerCase());
 
@@ -97,6 +124,12 @@ export default function AssigneeSelector({ value, onChange, placeholder = 'Selec
                         setOpen(true);
                         setSearch(value || '');
                     }}
+                    onKeyDown={(e) => {
+                        if (e.key === 'Enter' && search.trim()) {
+                            e.preventDefault();
+                            handleAddNew();
+                        }
+                    }}
                     readOnly={readOnly}
                     placeholder={placeholder}
                     className="w-full bg-transparent border-none outline-none px-3 py-2 text-sm text-slate-800 dark:text-zinc-200 placeholder:text-slate-400 cursor-text"
@@ -114,20 +147,33 @@ export default function AssigneeSelector({ value, onChange, placeholder = 'Selec
 
                         {!loading && filteredUsers.length === 0 && !search && (
                             <div className="p-3 text-center text-slate-500 text-xs">
-                                No users found. Type to add custom assignee.
+                                לא נמצאו אחראים. הקלד כדי להוסיף.
                             </div>
                         )}
 
-                        {filteredUsers.map(u => (
-                            <button
-                                key={u.uid}
-                                onClick={() => handleSelect(u.displayName)}
-                                className="w-full flex items-center justify-between px-3 py-2 hover:bg-slate-50 dark:hover:bg-zinc-800 rounded-lg transition-colors text-left"
-                            >
-                                <span className="font-medium text-slate-700 dark:text-zinc-300">{u.displayName}</span>
-                                {value === u.displayName && <Check className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />}
-                            </button>
-                        ))}
+                        {filteredUsers.map(u => {
+                            const isCustom = u.uid.startsWith('custom-');
+                            return (
+                                <div key={u.uid} className="w-full flex items-center justify-between px-3 py-2 hover:bg-slate-50 dark:hover:bg-zinc-800 rounded-lg transition-colors group">
+                                    <button
+                                        onClick={() => handleSelect(u.displayName)}
+                                        className="flex-1 flex items-center text-left"
+                                    >
+                                        <span className="font-medium text-slate-700 dark:text-zinc-300">{u.displayName}</span>
+                                        {value === u.displayName && <Check className="w-4 h-4 ml-2 rtl:mr-2 text-indigo-600 dark:text-indigo-400" />}
+                                    </button>
+                                    {isCustom && (
+                                        <button
+                                            onClick={(e) => handleDeleteCustom(e, u)}
+                                            title="מחק אחראי זמני"
+                                            className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10 rounded-md opacity-0 group-hover:opacity-100 transition-all focus:opacity-100 outline-none shrink-0"
+                                        >
+                                            <X className="w-3.5 h-3.5" />
+                                        </button>
+                                    )}
+                                </div>
+                            );
+                        })}
 
                         {search.trim() && !exactMatch && (
                             <div className="p-1 border-t border-slate-100 dark:border-zinc-800/50 mt-1">
@@ -136,7 +182,7 @@ export default function AssigneeSelector({ value, onChange, placeholder = 'Selec
                                     className="w-full flex items-center gap-2 px-3 py-2 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-500/10 rounded-lg transition-colors font-medium text-left outline-none"
                                 >
                                     <Plus className="w-4 h-4" />
-                                    <span className="truncate">Add custom assignee "{search.trim()}"</span>
+                                    <span className="truncate">הוסף אחראי חדש "{search.trim()}" (Enter)</span>
                                 </button>
                             </div>
                         )}

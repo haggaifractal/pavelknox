@@ -17,7 +17,12 @@ export interface ParsedKnowledge {
     isUrgent: boolean;
 }
 
-export async function extractAndRedactKnowledge(rawText: string): Promise<ParsedKnowledge> {
+export interface ParsedKnowledgeResult {
+    data: ParsedKnowledge;
+    usage?: { prompt_tokens: number; completion_tokens: number; total_tokens: number };
+}
+
+export async function extractAndRedactKnowledge(rawText: string): Promise<ParsedKnowledgeResult> {
     const systemPrompt = `
 אתה סוכן AI חכם ובטוח לחילוץ וסידור ידע עסקי וארגוני מתוך הודעות.
 
@@ -52,7 +57,10 @@ export async function extractAndRedactKnowledge(rawText: string): Promise<Parsed
         const result = response.choices[0]?.message?.content;
         if (!result) throw new Error('No content returned from GPT');
 
-        return JSON.parse(result) as ParsedKnowledge;
+        return {
+            data: JSON.parse(result) as ParsedKnowledge,
+            usage: response.usage as any
+        };
     } catch (error) {
         console.error('GPT Extraction Error:', error);
         throw error;

@@ -4,6 +4,7 @@ export const he = {
     navClients: 'לקוחות',
     navTags: 'תגיות',
     navAdminData: 'ניהול נתונים',
+    navAdminTokens: 'מכסות וחיוב',
     loading: 'טוען...',
     error: 'שגיאה',
     success: 'הצלחה',
