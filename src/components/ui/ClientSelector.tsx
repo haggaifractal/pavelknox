@@ -53,7 +53,7 @@ export default function ClientSelector({ value, onChange, placeholder = 'Select 
         if (!search.trim() || isSubmitting) return;
         setIsSubmitting(true);
         try {
-            await addClient(search.trim());
+            await addClient({ name: search.trim() });
             handleSelect(search.trim());
         } catch (error) {
             console.error("Failed to add client", error);
