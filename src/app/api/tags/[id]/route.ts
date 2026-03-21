@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { adminDb } from '@/lib/firebase/admin';
 import { verifyAuth } from '@/lib/firebase/serverAuth';
 
-export async function DELETE(request: Request, context: { params: Promise<{ id: string }> | { id: string } }) {
+export async function DELETE(request: Request, context: { params: Promise<{ id: string }> }) {
     try {
         const auth = await verifyAuth(request);
         if (!auth || (auth.role !== 'superadmin' && auth.role !== 'admin')) {
@@ -43,7 +43,7 @@ export async function DELETE(request: Request, context: { params: Promise<{ id: 
     }
 }
 
-export async function PATCH(request: Request, context: { params: Promise<{ id: string }> | { id: string } }) {
+export async function PATCH(request: Request, context: { params: Promise<{ id: string }> }) {
     try {
         const auth = await verifyAuth(request);
         if (!auth || (auth.role !== 'superadmin' && auth.role !== 'admin')) {

@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { adminAuth } from '@/lib/firebase/admin';
 import { verifySuperAdmin } from '@/lib/firebase/serverAuth';
 
-export async function PATCH(request: Request, context: { params: Promise<{ uid: string }> | { uid: string } }) {
+export async function PATCH(request: Request, context: { params: Promise<{ uid: string }> }) {
   try {
     const auth = await verifySuperAdmin(request);
     if (!auth) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
@@ -30,7 +30,7 @@ export async function PATCH(request: Request, context: { params: Promise<{ uid: 
   }
 }
 
-export async function DELETE(request: Request, context: { params: Promise<{ uid: string }> | { uid: string } }) {
+export async function DELETE(request: Request, context: { params: Promise<{ uid: string }> }) {
   try {
     const auth = await verifySuperAdmin(request);
     if (!auth) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
