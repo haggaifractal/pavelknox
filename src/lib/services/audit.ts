@@ -5,6 +5,7 @@ export type AuditActionType =
     | 'DELETE_KNOWLEDGE'
     | 'DELETE_TAG'
     | 'DELETE_CLIENT'
+    | 'BULK_DELETE_CLIENTS'
     | 'DELETE_TASK'
     | 'BULK_CLEANUP_RAW_INPUTS'
     | 'BULK_CLEANUP_ALL';

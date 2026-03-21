@@ -5,7 +5,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { X, Save, CheckCircle2, Clock, User, Sparkles, Loader2, AlertCircle, Circle, Trash2 } from 'lucide-react';
 import { useTranslation } from '@/lib/contexts/LanguageContext';
 import { Task } from '@/lib/types/task';
-import { collection, addDoc, query, where, onSnapshot, doc, updateDoc, deleteDoc } from 'firebase/firestore';
+import { collection, addDoc, query, where, onSnapshot, doc, updateDoc, deleteDoc, getCountFromServer } from 'firebase/firestore';
 import { db, auth } from '@/lib/firebase/client';
 import AssigneeSelector from '@/components/ui/AssigneeSelector';
 
@@ -118,6 +118,12 @@ export default function TasksPanel({ isOpen, onClose, draftId, content, metadata
         setError('');
 
         try {
+            const snapshot = await getCountFromServer(collection(db, 'tasks'));
+            const currentCount = snapshot.data().count;
+            if (currentCount + extractedTasks.length > 5000) { // Using 5000 as a reasonable limit for tasks
+                throw new Error(`שמירת המשימות תחרוג ממכסת המשימות המרבית במערכת. כרגע יש ${currentCount} משימות.`);
+            }
+
             const batchPromises = extractedTasks.map(async (taskObj) => {
                 const newTask: Omit<Task, 'id'> = {
                     sourceId: draftId,

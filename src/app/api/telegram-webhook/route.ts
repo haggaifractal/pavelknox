@@ -29,6 +29,16 @@ async function processIngestionAsync(docId: string, payload: any) {
         // 2. צנזור וארגון מחדש דרך GPT
         const parsedData = await extractAndRedactKnowledge(extractedText);
 
+        // Audit log for AI interaction
+        const auditChatId = payload?.message?.chat?.id?.toString() || 'unknown';
+        await adminDb.collection('ai_chat_logs').add({
+            timestamp: new Date(),
+            query: extractedText,
+            response: JSON.stringify(parsedData),
+            source: 'Telegram',
+            userId: auditChatId
+        }).catch(err => console.error('Failed to log Telegram interaction:', err));
+
         // 2.5 Duplicate Detection via Vector Search
         let isDuplicate = false;
         let duplicateSourceUrl = "";

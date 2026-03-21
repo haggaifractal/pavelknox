@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { collection, query, orderBy, onSnapshot, addDoc, serverTimestamp, doc, updateDoc, deleteDoc, writeBatch } from 'firebase/firestore';
+import { collection, query, orderBy, onSnapshot, addDoc, serverTimestamp, doc, updateDoc, deleteDoc, writeBatch, getCountFromServer } from 'firebase/firestore';
 import { db } from '../firebase/client';
 import { useAuth } from '../contexts/AuthContext';
 
@@ -62,6 +62,11 @@ export function useClients() {
     const addClient = async (clientData: Omit<Client, 'id' | 'createdAt'>): Promise<Client | null> => {
         if (!user || !clientData.name?.trim()) return null;
         try {
+            const snapshot = await getCountFromServer(collection(db, 'clients'));
+            if (snapshot.data().count >= 1000) {
+                throw new Error("הגעת למכסת הלקוחות המרבית (1000). לא ניתן להוסיף לקוחות נוספים.");
+            }
+
             const formattedName = clientData.name.trim();
             // Check if already exists by name
             const existing = clients.find(c => c.name.toLowerCase() === formattedName.toLowerCase());
@@ -116,26 +121,47 @@ export function useClients() {
     const importClients = async (importData: Omit<Client, 'id' | 'createdAt'>[]): Promise<number> => {
         if (!user || !importData.length) return 0;
         try {
+            const snapshot = await getCountFromServer(collection(db, 'clients'));
+            const currentCount = snapshot.data().count;
+
+            // Deduplicate against existing clients and within the CSV itself
+            const uniqueClientsMap = new Map<string, Omit<Client, 'id' | 'createdAt'>>();
+            importData.forEach(client => {
+                const name = client.name?.trim();
+                if (name) {
+                    const lowerName = name.toLowerCase();
+                    const existsInDb = clients.some(c => c.name.toLowerCase() === lowerName);
+                    if (!existsInDb && !uniqueClientsMap.has(lowerName)) {
+                        uniqueClientsMap.set(lowerName, client);
+                    }
+                }
+            });
+
+            const uniqueClientsToImport = Array.from(uniqueClientsMap.values());
+            if (uniqueClientsToImport.length === 0) return 0;
+
+            if (currentCount + uniqueClientsToImport.length > 1000) {
+                throw new Error(`ייבוא זה יחרוג ממכסת הלקוחות המרבית (1000). כרגע יש ${currentCount} לקוחות.`);
+            }
+
             let addCount = 0;
             const batchSize = 400; // Firestore batch limit is 500, play it safe
             
-            for (let i = 0; i < importData.length; i += batchSize) {
-                const batchChunk = importData.slice(i, i + batchSize);
+            for (let i = 0; i < uniqueClientsToImport.length; i += batchSize) {
+                const batchChunk = uniqueClientsToImport.slice(i, i + batchSize);
                 const batch = writeBatch(db);
                 
                 batchChunk.forEach(client => {
-                    if (client.name && client.name.trim()) {
-                        const newRef = doc(collection(db, 'clients'));
-                        batch.set(newRef, {
-                            name: client.name.trim(),
-                            contactPerson: client.contactPerson?.trim() || null,
-                            email: client.email?.trim() || null,
-                            phone: client.phone?.trim() || null,
-                            address: client.address?.trim() || null,
-                            createdAt: serverTimestamp()
-                        });
-                        addCount++;
-                    }
+                    const newRef = doc(collection(db, 'clients'));
+                    batch.set(newRef, {
+                        name: client.name!.trim(),
+                        contactPerson: client.contactPerson?.trim() || null,
+                        email: client.email?.trim() || null,
+                        phone: client.phone?.trim() || null,
+                        address: client.address?.trim() || null,
+                        createdAt: serverTimestamp()
+                    });
+                    addCount++;
                 });
                 
                 if (addCount > 0) {

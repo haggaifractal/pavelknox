@@ -10,15 +10,29 @@ export async function POST(request: Request) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
         }
 
-        const body = await request.json();
+        let body;
+        try {
+            body = await request.json();
+        } catch (e) {
+            return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
+        }
         const { collectionsToClean, olderThanDays } = body;
 
         let deletedCount = 0;
-        let details = {};
+        let details: Record<string, number> = {};
 
         if (collectionsToClean && olderThanDays) {
+            if (!Array.isArray(collectionsToClean)) {
+                return NextResponse.json({ error: 'collectionsToClean must be an array' }, { status: 400 });
+            }
+
+            const days = parseInt(olderThanDays);
+            if (isNaN(days)) {
+                return NextResponse.json({ error: 'olderThanDays must be a valid number' }, { status: 400 });
+            }
+
             const cutoffDate = new Date();
-            cutoffDate.setDate(cutoffDate.getDate() - parseInt(olderThanDays));
+            cutoffDate.setDate(cutoffDate.getDate() - days);
             // Convert to Firebase admin Timestamp for reliable comparison
             const timestamp = Timestamp.fromDate(cutoffDate);
 
@@ -30,21 +44,32 @@ export async function POST(request: Request) {
                     .get();
 
                 if (!querySnapshot.empty) {
-                    const batch = adminDb.batch();
+                    const chunks = [];
+                    let currentBatch = adminDb.batch();
+                    let currentBatchCount = 0;
                     let count = 0;
 
                     querySnapshot.forEach((doc: any) => {
-                        batch.delete(doc.ref);
+                        currentBatch.delete(doc.ref);
+                        currentBatchCount++;
                         count++;
+
+                        if (currentBatchCount === 500) {
+                            chunks.push(currentBatch.commit());
+                            currentBatch = adminDb.batch();
+                            currentBatchCount = 0;
+                        }
                     });
 
-                    await batch.commit();
+                    if (currentBatchCount > 0) {
+                        chunks.push(currentBatch.commit());
+                    }
+
+                    await Promise.all(chunks);
 
                     deletedCount += count;
-                    // @ts-ignore
                     details['raw_inputs'] = count;
                 } else {
-                    // @ts-ignore
                     details['raw_inputs'] = 0;
                 }
             }

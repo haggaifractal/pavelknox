@@ -28,17 +28,17 @@ const tools: OpenAI.Chat.Completions.ChatCompletionTool[] = [
     type: "function",
     function: {
       name: "get_open_tasks",
-      description: "Fetches open (pending or in progress) tasks/action items from the Task Board.",
+      description: "Fetches open (pending or in progress) tasks/action items from the Task Board. Supports partial or fuzzy matching.",
       parameters: {
         type: "object",
         properties: {
           clientName: {
             type: "string",
-            description: "Optional. Filter tasks by a specific client name."
+            description: "Optional. Filter tasks by a specific client name. You can use partial names."
           },
           assignee: {
             type: "string",
-            description: "Optional. Filter tasks by a specific assignee name."
+            description: "Optional. Filter tasks by a specific assignee name. You can use partial names."
           }
         }
       }
@@ -63,7 +63,14 @@ export async function POST(req: Request) {
       defaultHeaders: { 'api-key': process.env.AZURE_OPENAI_API_KEY! },
     });
 
-    const { query, history = [] } = await req.json();
+    let query, history;
+    try {
+        const body = await req.json();
+        query = body.query;
+        history = body.history || [];
+    } catch (e) {
+        return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
+    }
 
     if (!query) {
       return NextResponse.json({ error: 'Query is required' }, { status: 400 });
@@ -146,13 +153,13 @@ CRITICAL RULES FOR FINAL ANSWER:
 
                 // Perform fuzzy matching in memory
                 if (functionArgs.clientName) {
-                    const searchClient = functionArgs.clientName.toLowerCase();
+                    const searchClient = String(functionArgs.clientName).toLowerCase();
                     matchedTasks = matchedTasks.filter((t: any) => 
                         t.clientName && t.clientName.toLowerCase().includes(searchClient)
                     );
                 }
                 if (functionArgs.assignee) {
-                    const searchAssignee = functionArgs.assignee.toLowerCase();
+                    const searchAssignee = String(functionArgs.assignee).toLowerCase();
                     matchedTasks = matchedTasks.filter((t: any) => 
                         t.assignee && t.assignee.toLowerCase().includes(searchAssignee)
                     );
@@ -224,6 +231,16 @@ CRITICAL RULES FOR FINAL ANSWER:
     }
     const finalSourcesList = Object.values(uniqueSourcesObj);
 
+    // Audit log
+    await adminDb.collection('ai_chat_logs').add({
+        timestamp: new Date(),
+        query: query,
+        response: finalAnswer,
+        source: 'Web',
+        userId: auth.uid,
+        contextUsed: contextUsed,
+    }).catch(err => console.error('Failed to log chat:', err));
+
     return NextResponse.json({ 
       success: true, 
       answer: finalAnswer,
@@ -240,7 +257,8 @@ CRITICAL RULES FOR FINAL ANSWER:
         const indexUrl = urlMatch ? urlMatch[0] : '';
         
         return NextResponse.json({ 
-          error: `החיפוש דורש יצירת אינדקס וקטורי במסד הנתונים. אנא העתק את הלינק הבא והדבק בדפדפן כדי ליצור אותו: ${indexUrl}`
+          error: `Vector index required for search. Please copy this link and paste it into your browser to create the index: ${indexUrl}`,
+          indexUrl
         }, { status: 500 });
     }
 

@@ -61,13 +61,20 @@ service cloud.firestore {
     // Tasks: Extracted action items. Readable by viewers, writable by admins.
     match /tasks/{document=**} {
       allow read: if isViewer();
-      allow write: if isAdmin();
+      allow write: if isAdmin() &&
+                   (!request.resource.data.keys().hasAny(['title']) || request.resource.data.title.size() <= 100) &&
+                   (!request.resource.data.keys().hasAny(['description']) || request.resource.data.description.size() <= 1000);
     }
 
     // Clients: Global client list. Readable by viewers, writable by admins.
     match /clients/{document=**} {
       allow read: if isViewer();
-      allow write: if isAdmin();
+      allow write: if isAdmin() &&
+                   (!request.resource.data.keys().hasAny(['name']) || request.resource.data.name.size() <= 100) &&
+                   (!request.resource.data.keys().hasAny(['phone']) || request.resource.data.phone.size() <= 20) &&
+                   (!request.resource.data.keys().hasAny(['description']) || request.resource.data.description.size() <= 1000) &&
+                   (!request.resource.data.keys().hasAny(['budget']) || request.resource.data.budget is int) &&
+                   (!request.resource.data.keys().hasAny(['cost']) || request.resource.data.cost is int);
     }
 
     // Users: Internal metadata mapping if needed. Strictly SuperAdmin.
