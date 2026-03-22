@@ -16,4 +16,16 @@ export interface Task {
   departmentIds?: string[]; // Departments this task belongs to
   createdAt: any; // Firestore Timestamp or Date
   updatedAt: any; // Firestore Timestamp or Date
+  isBillable?: boolean; // Whether time spent on this task is billable
+  timeEntries?: TimeEntry[]; // Logged time entries
+  totalLoggedMinutes?: number; // Cached total of logged time
+}
+
+export interface TimeEntry {
+  id: string;
+  userId: string;
+  userName: string;
+  date: string;
+  minutes: number;
+  description?: string;
 }

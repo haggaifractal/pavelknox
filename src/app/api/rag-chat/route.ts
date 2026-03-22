@@ -209,6 +209,9 @@ CRITICAL RULES FOR FINAL ANSWER:
                 const tasksSnapshot = await tasksRef.limit(100).get();
                 let matchedTasks = tasksSnapshot.docs.map((d: any) => ({ id: d.id, ...d.data() }));
 
+                // Filter out tasks that have been soft-deleted
+                matchedTasks = matchedTasks.filter((t: any) => t.isDeleted !== true);
+
                 // Perform fuzzy matching in memory
                 if (functionArgs.clientName) {
                     const searchClient = String(functionArgs.clientName).toLowerCase();

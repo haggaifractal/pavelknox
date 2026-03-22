@@ -203,7 +203,9 @@ export default function DraftEditorPage({ params }: EditorPageProps) {
                         clientName: clientName,
                         tags: tags,
                         type: 'approved_draft',
-                        sourceUrl: `/knowledge/${kbDocRef.id}`
+                        sourceUrl: `/knowledge/${kbDocRef.id}`,
+                        visibilityScope: visibilityScope,
+                        departmentIds: departmentIds
                     })
                 });
                 if (!ingestRes.ok) {

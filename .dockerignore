@@ -1,0 +1,13 @@
+Dockerfile
+.dockerignore
+node_modules
+npm-debug.log
+README.md
+.next
+!.next/standalone
+!.next/static
+.git
+.firebase
+.firebaserc
+deploy_public
+public/_next

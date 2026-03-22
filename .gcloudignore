@@ -1,0 +1,9 @@
+.git
+.github
+.firebase
+.firebaserc
+node_modules
+deploy_public
+public/_next
+npm-debug.log
+.next

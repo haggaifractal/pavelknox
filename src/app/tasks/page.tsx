@@ -2,7 +2,7 @@
 
 import AuthGuard from '@/components/ui/AuthGuard';
 import { useEffect, useState } from 'react';
-import { collection, query, orderBy, onSnapshot, doc, updateDoc, deleteDoc, where, QueryConstraint, addDoc } from 'firebase/firestore';
+import { collection, query, orderBy, onSnapshot, doc, getDoc, updateDoc, deleteDoc, where, QueryConstraint, addDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebase/client';
 import { useTranslation } from '@/lib/contexts/LanguageContext';
 import { Task } from '@/lib/types/task';
@@ -75,6 +75,10 @@ export default function TasksPage() {
     const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
     const [editForm, setEditForm] = useState<Partial<Task>>({});
     
+    // Time Tracking State
+    const [loggingTimeTaskId, setLoggingTimeTaskId] = useState<string | null>(null);
+    const [timeEntryForm, setTimeEntryForm] = useState({minutes: 15, description: '', date: new Date().toISOString().slice(0,10)});
+    
     // Bulk Selection
     const [selectedTasks, setSelectedTasks] = useState<string[]>([]);
     const [isSelectionMode, setIsSelectionMode] = useState(false);
@@ -132,8 +136,11 @@ export default function TasksPage() {
                 updatedAt: new Date()
             });
             // Audit Log
+            const statusKeyMap: Record<string, string> = { pending: 'statusPending', in_progress: 'statusInProgress', completed: 'statusCompleted' };
+            const statusKey = statusKeyMap[newStatus] || 'statusPending';
+            
             await addDoc(collection(db, `tasks/${currentTask.id}/comments`), {
-                text: `Status changed to ${newStatus}`,
+                text: t('tasks.statusChangeLog').replace('{status}', t(`tasks.${statusKey}`)),
                 authorId: user?.uid,
                 authorName: user?.displayName || 'Unknown',
                 createdAt: new Date(),
@@ -203,8 +210,10 @@ export default function TasksPage() {
             assigneeId: task.assigneeId || null,
             deadline: task.deadline || null,
             createdAt: task.createdAt,
-            status: task.status
+            status: task.status,
+            isBillable: task.isBillable || false
         });
+        setTimeEntryForm({minutes: 0, description: '', date: new Date().toISOString().slice(0,10)});
     };
 
     const handleSaveEdit = async () => {
@@ -217,8 +226,32 @@ export default function TasksPage() {
                 assigneeId: editForm.assigneeId || null,
                 deadline: editForm.deadline,
                 status: editForm.status,
+                isBillable: editForm.isBillable || false,
                 updatedAt: new Date()
             };
+            
+            // Check if we should add a time entry alongside this edit
+            if (editForm.isBillable && timeEntryForm.minutes > 0) {
+                if (!editForm.clientName) {
+                    alert("חובה לשייך את המשימה ללקוח לפני דיווח שעות.");
+                    return;
+                }
+                const newEntry = {
+                    id: crypto.randomUUID(),
+                    userId: user?.uid || 'unknown',
+                    userName: user?.displayName || user?.email?.split('@')[0] || 'Unknown',
+                    date: timeEntryForm.date,
+                    minutes: Number(timeEntryForm.minutes),
+                    description: timeEntryForm.description
+                };
+                
+                const taskOriginal = tasks.find(t => t.id === editingTaskId);
+                const currentEntries = taskOriginal?.timeEntries || [];
+                const currentTotal = taskOriginal?.totalLoggedMinutes || 0;
+                
+                updates.timeEntries = [...currentEntries, newEntry];
+                updates.totalLoggedMinutes = currentTotal + newEntry.minutes;
+            }
             
             if (editForm.createdAt && !(editForm.createdAt as any).toDate) {
                 updates.createdAt = new Date(editForm.createdAt);
@@ -227,9 +260,81 @@ export default function TasksPage() {
             await updateDoc(doc(db, 'tasks', editingTaskId), updates);
             setEditingTaskId(null);
             setEditForm({});
+            setTimeEntryForm({minutes: 0, description: '', date: new Date().toISOString().slice(0,10)});
         } catch(e) {
             console.error("Error saving task", e);
             alert("שגיאה בשמירת המשימה");
+        }
+    };
+
+    // Removed handleAddTimeEntry as it's now part of handleSaveEdit
+
+    const handleAddTimeEntryOnly = async (taskId: string) => {
+        if (!timeEntryForm.minutes || timeEntryForm.minutes <= 0) return;
+        try {
+            const taskOriginal = tasks.find(t => t.id === taskId);
+            if (!taskOriginal) return;
+
+            if (!taskOriginal.clientName) {
+                alert("חובה לשייך את המשימה ללקוח בעריכת המשימה לפני דיווח שעות.");
+                return;
+            }
+
+            const newEntry = {
+                id: crypto.randomUUID(),
+                userId: user?.uid || 'unknown',
+                userName: user?.displayName || user?.email?.split('@')[0] || 'Unknown',
+                date: timeEntryForm.date,
+                minutes: Number(timeEntryForm.minutes),
+                description: timeEntryForm.description
+            };
+
+            const currentEntries = taskOriginal.timeEntries || [];
+            const currentTotal = taskOriginal.totalLoggedMinutes || 0;
+
+            const updates = {
+                timeEntries: [...currentEntries, newEntry],
+                totalLoggedMinutes: currentTotal + newEntry.minutes,
+                updatedAt: new Date()
+            };
+
+            await updateDoc(doc(db, 'tasks', taskId), updates);
+            setLoggingTimeTaskId(null);
+            setTimeEntryForm({minutes: 15, description: '', date: new Date().toISOString().slice(0,10)});
+        } catch(e) {
+            console.error("Error adding time", e);
+            alert("שגיאה בהוספת זמן");
+        }
+    };
+
+    const handleDeleteTimeEntry = async (taskId: string, entryId: string, minutesToDeduct: number) => {
+        if (!confirm(t('tasks.confirmDeleteTimeEntry'))) return;
+        try {
+            const taskRef = doc(db, 'tasks', taskId);
+            const taskDoc = await getDoc(taskRef);
+            if (taskDoc.exists()) {
+                const data = taskDoc.data();
+                const currentEntries = data.timeEntries || [];
+                const updatedEntries = currentEntries.filter((e: any) => e.id !== entryId);
+                const newTotal = updatedEntries.reduce((sum: number, entry: any) => sum + entry.minutes, 0);
+                
+                await updateDoc(taskRef, {
+                    timeEntries: updatedEntries,
+                    totalLoggedMinutes: newTotal,
+                    updatedAt: new Date()
+                });
+
+                await addDoc(collection(db, `tasks/${taskId}/comments`), {
+                    text: t('tasks.timeEntryDeletedLog').replace('{minutes}', minutesToDeduct.toString()),
+                    authorId: user?.uid,
+                    authorName: user?.displayName || user?.email?.split('@')[0] || t('tasks.defaultUser'),
+                    createdAt: new Date(),
+                    type: 'time_deleted'
+                });
+            }
+        } catch (error) {
+            console.error('Error deleting time entry:', error);
+            alert(t('tasks.errorDeleteTimeEntry'));
         }
     };
 
@@ -407,7 +512,7 @@ export default function TasksPage() {
                                                 className="bg-white dark:bg-zinc-900 p-6 rounded-3xl border-2 border-indigo-500 shadow-xl flex flex-col gap-4 z-10"
                                             >
                                                 <div className="flex justify-between items-center border-b border-slate-100 dark:border-zinc-800 pb-3 mb-1">
-                                                    <h3 className="font-bold text-sm text-slate-800 dark:text-zinc-200">עריכת משימה</h3>
+                                                    <h3 className="font-bold text-sm text-slate-800 dark:text-zinc-200">{t('tasks.editTaskTitle')}</h3>
                                                     <button onClick={() => setEditingTaskId(null)} className="p-1 text-slate-400 hover:text-slate-700 dark:hover:text-zinc-200 transition">
                                                         <X className="w-5 h-5"/>
                                                     </button>
@@ -418,12 +523,12 @@ export default function TasksPage() {
                                                     onChange={e => setEditForm({...editForm, description: e.target.value})}
                                                     disabled={!canEditFullTask}
                                                     className={`w-full bg-slate-50 dark:bg-zinc-950 border border-slate-200 dark:border-zinc-800 rounded-xl p-3 text-sm focus:ring-2 focus:ring-indigo-500 resize-none min-h-[80px] outline-none ${!canEditFullTask ? 'opacity-70 cursor-not-allowed' : ''}`}
-                                                    placeholder="תיאור המשימה..."
+                                                    placeholder={t('tasks.taskDescPlaceholder')}
                                                 />
 
                                                 <div className="grid grid-cols-2 gap-3">
                                                     <div>
-                                                        <label className="text-xs font-semibold text-slate-500 mb-1 block">תאריך יעד</label>
+                                                        <label className="text-xs font-semibold text-slate-500 mb-1 block">{t('tasks.deadline')}</label>
                                                         <input 
                                                             type="datetime-local"
                                                             value={toDatetimeLocal(editForm.deadline)}
@@ -433,12 +538,12 @@ export default function TasksPage() {
                                                         />
                                                     </div>
                                                     <div>
-                                                        <label className="text-xs font-semibold text-slate-500 mb-1 block">לקוח</label>
+                                                        <label className="text-xs font-semibold text-slate-500 mb-1 block">{t('tasks.client')}</label>
                                                         <ClientSelector 
                                                             value={editForm.clientName || ''}
                                                             onChange={val => setEditForm({...editForm, clientName: val})}
                                                             readOnly={!canEditFullTask}
-                                                            placeholder="בחר לקוח..."
+                                                            placeholder={t('tasks.selectClient')}
                                                             className={`bg-slate-50 dark:bg-zinc-950 text-[13px] ${!canEditFullTask ? 'opacity-70 cursor-not-allowed' : ''}`}
                                                         />
                                                     </div>
@@ -446,7 +551,7 @@ export default function TasksPage() {
 
                                                 <div className="grid grid-cols-2 gap-3">
                                                     <div className="z-10 relative">
-                                                        <label className="text-xs font-semibold text-slate-500 mb-1 block">אחראי</label>
+                                                        <label className="text-xs font-semibold text-slate-500 mb-1 block">{t('tasks.assignee')}</label>
                                                         <AssigneeSelector 
                                                             value={editForm.assignee}
                                                             onChange={vObj => setEditForm({...editForm, assignee: vObj.displayName, assigneeId: vObj.uid})}
@@ -455,23 +560,85 @@ export default function TasksPage() {
                                                         />
                                                     </div>
                                                     <div>
-                                                        <label className="text-xs font-semibold text-slate-500 mb-1 block">סטטוס</label>
+                                                        <label className="text-xs font-semibold text-slate-500 mb-1 block">{t('tasks.status')}</label>
                                                         <select
                                                             value={editForm.status}
                                                             onChange={e => setEditForm({...editForm, status: e.target.value as any})}
                                                             className="w-full h-[40px] bg-slate-50 dark:bg-zinc-950 border border-slate-200 dark:border-zinc-800 rounded-lg p-2 text-[13px] outline-none focus:ring-2 focus:ring-indigo-500"
                                                         >
-                                                            <option value="pending">ממתין</option>
-                                                            <option value="in_progress">בטיפול</option>
-                                                            <option value="completed">הושלם</option>
+                                                            <option value="pending">{t('tasks.statusPending')}</option>
+                                                            <option value="in_progress">{t('tasks.statusInProgress')}</option>
+                                                            <option value="completed">{t('tasks.statusCompleted')}</option>
                                                         </select>
                                                     </div>
+                                                </div>
+
+                                                <div className="mt-4 flex flex-col gap-1">
+                                                    <div className="flex items-center gap-2">
+                                                        <input 
+                                                            type="checkbox" 
+                                                            id={`billable-${taskItem.id}`}
+                                                            checked={editForm.isBillable || false}
+                                                            onChange={e => setEditForm({...editForm, isBillable: e.target.checked})}
+                                                            disabled={!canEditFullTask}
+                                                            className="w-4 h-4 text-indigo-600 rounded border-slate-300 focus:ring-indigo-500"
+                                                        />
+                                                        <label htmlFor={`billable-${taskItem.id}`} className="text-sm font-medium text-slate-700 dark:text-zinc-300 cursor-pointer">
+                                                            {t('tasks.billableTask')}
+                                                        </label>
+                                                    </div>
+                                                    
+                                                    {editForm.isBillable && (
+                                                        <div className="mt-3 p-3 bg-indigo-50/50 dark:bg-zinc-900/30 border border-indigo-100 dark:border-zinc-800 rounded-lg">
+                                                            <h5 className="text-[13px] font-semibold text-indigo-800 dark:text-indigo-400 mb-3">
+                                                                {t('tasks.addTimeEntryTitle')}
+                                                            </h5>
+                                                            <div className="space-y-3">
+                                                                <div className="flex gap-2">
+                                                                    <input 
+                                                                        type="date" 
+                                                                        value={timeEntryForm.date}
+                                                                        onChange={e => setTimeEntryForm({...timeEntryForm, date: e.target.value})}
+                                                                        className="flex-1 text-xs p-2 rounded-md border border-slate-200 dark:border-zinc-700 bg-white dark:bg-zinc-950 focus:ring-1 focus:ring-indigo-500 outline-none"
+                                                                    />
+                                                                    <select 
+                                                                        value={timeEntryForm.minutes}
+                                                                        onChange={e => setTimeEntryForm({...timeEntryForm, minutes: Number(e.target.value)})}
+                                                                        className="w-28 text-xs p-2 rounded-md border border-slate-200 dark:border-zinc-700 bg-white dark:bg-zinc-950 focus:ring-1 focus:ring-indigo-500 outline-none"
+                                                                    >
+                                                                        <option value={0}>{t('tasks.minutes0')}</option>
+                                                                        <option value={15}>{t('tasks.minutes15')}</option>
+                                                                        <option value={30}>{t('tasks.minutes30')}</option>
+                                                                        <option value={45}>{t('tasks.minutes45')}</option>
+                                                                        <option value={60}>{t('tasks.minutes60')}</option>
+                                                                        <option value={90}>{t('tasks.minutes90')}</option>
+                                                                        <option value={120}>{t('tasks.minutes120')}</option>
+                                                                        <option value={150}>{t('tasks.minutes150') || 'שעתיים וחצי'}</option>
+                                                                        <option value={180}>{t('tasks.minutes180') || '3 שעות'}</option>
+                                                                        <option value={210}>{t('tasks.minutes210') || '3.5 שעות'}</option>
+                                                                        <option value={240}>{t('tasks.minutes240') || '4 שעות'}</option>
+                                                                        <option value={270}>{t('tasks.minutes270') || '4.5 שעות'}</option>
+                                                                        <option value={300}>{t('tasks.minutes300') || '5 שעות'}</option>
+                                                                        <option value={330}>{t('tasks.minutes330') || '5.5 שעות'}</option>
+                                                                        <option value={360}>{t('tasks.minutes360') || '6 שעות'}</option>
+                                                                    </select>
+                                                                </div>
+                                                                <input 
+                                                                    type="text"
+                                                                    placeholder={t('tasks.timeEntryDescPlaceholder')}
+                                                                    value={timeEntryForm.description}
+                                                                    onChange={e => setTimeEntryForm({...timeEntryForm, description: e.target.value})}
+                                                                    className="w-full text-xs p-2 rounded-md border border-slate-200 dark:border-zinc-700 bg-white dark:bg-zinc-950 focus:ring-1 focus:ring-indigo-500 outline-none"
+                                                                />
+                                                            </div>
+                                                        </div>
+                                                    )}
                                                 </div>
 
                                                 <div className="mt-4 pt-4 border-t border-slate-100 dark:border-zinc-800">
                                                     <h4 className="text-sm font-semibold text-slate-700 dark:text-zinc-300 mb-3 flex items-center gap-2">
                                                         <MessageSquare className="w-4 h-4" />
-                                                        פעילות והערות
+                                                        {t('tasks.activityAndComments')}
                                                     </h4>
                                                     <div className="h-[250px]">
                                                         <TaskComments taskId={taskItem.id!} />
@@ -480,10 +647,10 @@ export default function TasksPage() {
 
                                                 <div className="mt-2 flex gap-3">
                                                     <button onClick={handleSaveEdit} className="flex-1 flex justify-center items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white py-2.5 rounded-xl font-medium text-sm transition-colors shadow-sm outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-1 dark:focus:ring-offset-zinc-900">
-                                                        <Save className="w-4 h-4"/> שמור
+                                                        <Save className="w-4 h-4"/> {t('tasks.save')}
                                                     </button>
                                                     <button onClick={() => setEditingTaskId(null)} className="flex-1 flex justify-center items-center bg-white dark:bg-zinc-800 border border-slate-200 dark:border-zinc-700 text-slate-700 dark:text-zinc-300 py-2.5 rounded-xl font-medium text-sm transition-colors hover:bg-slate-50 dark:hover:bg-zinc-700 shadow-sm outline-none">
-                                                        ביטול
+                                                        {t('tasks.cancel')}
                                                     </button>
                                                 </div>
                                             </motion.div>
@@ -522,7 +689,7 @@ export default function TasksPage() {
                                                       <button 
                                                           onClick={() => handleStartEdit(taskItem)}
                                                           className="p-1.5 text-indigo-400 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-500/10 rounded-lg transition-colors outline-none"
-                                                          title={canEditFullTask ? "ערוך משימה" : "צפה בפרטי משימה והערות"}
+                                                          title={canEditFullTask ? t('tasks.editTask') : t('tasks.viewTaskAndComments')}
                                                       >
                                                           <Edit2 className="w-4 h-4" />
                                                       </button>
@@ -531,7 +698,7 @@ export default function TasksPage() {
                                                     <button 
                                                         onClick={() => handleDeleteTask(taskItem.id!)}
                                                         className="p-1.5 text-rose-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-500/10 rounded-lg transition-colors outline-none"
-                                                        title="מחק משימה"
+                                                        title={t('tasks.deleteTask')}
                                                     >
                                                         <Trash2 className="w-4 h-4" />
                                                     </button>
@@ -570,6 +737,132 @@ export default function TasksPage() {
                                                     </span>
                                                 )}
                                             </div>
+
+                                            {taskItem.isBillable && (
+                                                <div className="mt-2 mb-4 bg-slate-50 dark:bg-zinc-900/50 rounded-xl p-3 border border-slate-100 dark:border-zinc-800">
+                                                    <div className="flex items-center justify-between gap-1.5 text-xs font-semibold text-slate-600 dark:text-zinc-400">
+                                                        <div className="flex items-center gap-1.5">
+                                                            <Clock className="w-3.5 h-3.5 text-indigo-500" />
+                                                            <span>{t('tasks.timeLogged')}: {taskItem.totalLoggedMinutes ? `${Math.floor(taskItem.totalLoggedMinutes / 60).toString().padStart(2, '0')}:${(taskItem.totalLoggedMinutes % 60).toString().padStart(2, '0')}` : '00:00'}</span>
+                                                        </div>
+                                                        {loggingTimeTaskId !== taskItem.id && canEditFullTask && (
+                                                            <button 
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    setLoggingTimeTaskId(taskItem.id!);
+                                                                    setTimeEntryForm({minutes: 15, description: '', date: new Date().toISOString().slice(0,10)});
+                                                                }} 
+                                                                className="text-indigo-600 hover:text-indigo-700 bg-indigo-50 dark:bg-indigo-900/30 px-2 py-1 rounded-md transition-colors text-[11px] focus:outline-none"
+                                                            >
+                                                                + {t('tasks.addTimeEntryTitle') || 'הוסף זמן'}
+                                                            </button>
+                                                        )}
+                                                    </div>
+
+                                                    {taskItem.timeEntries && taskItem.timeEntries.length > 0 && (
+                                                        <div className="mt-3 space-y-1.5 border-t border-slate-200/50 dark:border-zinc-800/50 pt-3">
+                                                            {taskItem.timeEntries.map((entry, idx) => (
+                                                                <div key={idx} className="flex justify-between items-center text-[10px] sm:text-[11px] text-slate-500 dark:text-zinc-400 bg-white/60 dark:bg-zinc-950/40 p-1.5 rounded-md px-2 border border-slate-100 dark:border-zinc-800/80">
+                                                                    <div className="flex flex-wrap items-center gap-1.5 rtl:space-x-reverse">
+                                                                        <span className="font-medium text-slate-700 dark:text-zinc-300" dir="auto">{entry.userName}</span>
+                                                                        <span className="text-slate-300 dark:text-zinc-700 text-[9px] px-0.5">•</span>
+                                                                        <span className="opacity-75" dir="ltr">{new Date(entry.date).toLocaleDateString('he-IL')}</span>
+                                                                        {entry.description && (
+                                                                            <>
+                                                                                <span className="text-slate-300 dark:text-zinc-700 text-[9px] px-0.5">•</span>
+                                                                                <span className="text-slate-500 dark:text-zinc-400 max-w-[120px] truncate" title={entry.description} dir="auto">
+                                                                                    {entry.description}
+                                                                                </span>
+                                                                            </>
+                                                                        )}
+                                                                    </div>
+                                                                    <div className="flex items-center gap-2">
+                                                                        <span className="font-semibold text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-900/40 px-1.5 py-0.5 rounded shadow-sm whitespace-nowrap">
+                                                                            {Math.floor(entry.minutes / 60).toString().padStart(2, '0')}:{(entry.minutes % 60).toString().padStart(2, '0')} h
+                                                                        </span>
+                                                                        {(isAdmin || user?.uid === entry.userId) && entry.id && (
+                                                                            <button
+                                                                                onClick={(e) => {
+                                                                                    e.stopPropagation();
+                                                                                    handleDeleteTimeEntry(taskItem.id!, entry.id, entry.minutes);
+                                                                                }}
+                                                                                className="text-slate-400 hover:text-red-500 dark:text-zinc-500 dark:hover:text-red-400 transition-colors p-0.5 focus:outline-none"
+                                                                                title={t('tasks.deleteTimeEntryTooltip')}
+                                                                            >
+                                                                                <Trash2 className="w-3.5 h-3.5" />
+                                                                            </button>
+                                                                        )}
+                                                                    </div>
+                                                                </div>
+                                                            ))}
+                                                        </div>
+                                                    )}
+
+                                                    <AnimatePresence>
+                                                        {loggingTimeTaskId === taskItem.id && (
+                                                            <motion.div 
+                                                                initial={{ height: 0, opacity: 0 }}
+                                                                animate={{ height: 'auto', opacity: 1 }}
+                                                                exit={{ height: 0, opacity: 0 }}
+                                                                className="overflow-hidden mt-3 pt-3 border-t border-slate-200 dark:border-zinc-800"
+                                                                onClick={(e) => e.stopPropagation()}
+                                                            >
+                                                                <div className="flex flex-col gap-2">
+                                                                    <div className="flex gap-2">
+                                                                        <input 
+                                                                            type="date" 
+                                                                            value={timeEntryForm.date}
+                                                                            onChange={e => setTimeEntryForm({...timeEntryForm, date: e.target.value})}
+                                                                            className="w-1/2 text-[11px] p-2 rounded-md border border-slate-200 dark:border-zinc-700 bg-white dark:bg-zinc-950 focus:ring-1 focus:ring-indigo-500 outline-none"
+                                                                        />
+                                                                        <select 
+                                                                            value={timeEntryForm.minutes}
+                                                                            onChange={e => setTimeEntryForm({...timeEntryForm, minutes: Number(e.target.value)})}
+                                                                            className="w-1/2 text-[11px] p-2 rounded-md border border-slate-200 dark:border-zinc-700 bg-white dark:bg-zinc-950 focus:ring-1 focus:ring-indigo-500 outline-none"
+                                                                        >
+                                                                            <option value={15}>{t('tasks.minutes15') || '15 דק’'}</option>
+                                                                            <option value={30}>{t('tasks.minutes30') || '30 דק’'}</option>
+                                                                            <option value={45}>{t('tasks.minutes45') || '45 דק’'}</option>
+                                                                            <option value={60}>{t('tasks.minutes60') || 'שעה 1'}</option>
+                                                                            <option value={90}>{t('tasks.minutes90') || 'שעה וחצי'}</option>
+                                                                            <option value={120}>{t('tasks.minutes120') || 'שעתיים'}</option>
+                                                                            <option value={150}>{t('tasks.minutes150') || 'שעתיים וחצי'}</option>
+                                                                            <option value={180}>{t('tasks.minutes180') || '3 שעות'}</option>
+                                                                            <option value={210}>{t('tasks.minutes210') || '3.5 שעות'}</option>
+                                                                            <option value={240}>{t('tasks.minutes240') || '4 שעות'}</option>
+                                                                            <option value={270}>{t('tasks.minutes270') || '4.5 שעות'}</option>
+                                                                            <option value={300}>{t('tasks.minutes300') || '5 שעות'}</option>
+                                                                            <option value={330}>{t('tasks.minutes330') || '5.5 שעות'}</option>
+                                                                            <option value={360}>{t('tasks.minutes360') || '6 שעות'}</option>
+                                                                        </select>
+                                                                    </div>
+                                                                    <input 
+                                                                        type="text"
+                                                                        placeholder={t('tasks.timeEntryDescPlaceholder') || 'תיאור (אופציונלי)'}
+                                                                        value={timeEntryForm.description}
+                                                                        onChange={e => setTimeEntryForm({...timeEntryForm, description: e.target.value})}
+                                                                        className="w-full text-[11px] p-2 rounded-md border border-slate-200 dark:border-zinc-700 bg-white dark:bg-zinc-950 focus:ring-1 focus:ring-indigo-500 outline-none"
+                                                                    />
+                                                                    <div className="flex justify-end gap-2 mt-1">
+                                                                        <button 
+                                                                            onClick={() => setLoggingTimeTaskId(null)} 
+                                                                            className="px-3 py-1 text-[11px] font-medium text-slate-500 hover:text-slate-700 dark:text-zinc-400 dark:hover:text-zinc-200 focus:outline-none"
+                                                                        >
+                                                                            ביטול
+                                                                        </button>
+                                                                        <button 
+                                                                            onClick={() => handleAddTimeEntryOnly(taskItem.id!)} 
+                                                                            className="px-3 py-1 text-[11px] font-medium bg-indigo-600 hover:bg-indigo-700 text-white rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-1 dark:focus:ring-offset-zinc-900"
+                                                                        >
+                                                                            שמור
+                                                                        </button>
+                                                                    </div>
+                                                                </div>
+                                                            </motion.div>
+                                                        )}
+                                                    </AnimatePresence>
+                                                </div>
+                                            )}
 
                                             <div className="mt-auto pt-4 border-t border-slate-100 dark:border-zinc-800/80">
                                                 <div className="flex flex-col gap-2">

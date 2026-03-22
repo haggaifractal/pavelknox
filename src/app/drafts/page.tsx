@@ -298,7 +298,9 @@ export default function DraftsPage() {
                         clientName: fullDraft.clientName || '',
                         tags: fullDraft.tags || [],
                         type: 'approved_draft',
-                        sourceUrl: `/knowledge/${kbDocRef.id}`
+                        sourceUrl: `/knowledge/${kbDocRef.id}`,
+                        visibilityScope: fullDraft.visibilityScope || 'global',
+                        departmentIds: fullDraft.departmentIds || []
                     })
                 });
 

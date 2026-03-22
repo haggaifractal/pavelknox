@@ -3,9 +3,10 @@ import { collection, query, orderBy, onSnapshot, addDoc, serverTimestamp } from 
 import { db } from '@/lib/firebase/client';
 import { useAuth } from '@/lib/contexts/AuthContext';
 import { Send, User as UserIcon, Trash2, Loader2 } from 'lucide-react';
+import { useTranslation } from '@/lib/contexts/LanguageContext';
 
-const formatDate = (date: any) => {
-    if (!date) return 'עכשיו';
+const formatDate = (date: any, t: any) => {
+    if (!date) return t('tasks.now');
     return new Intl.DateTimeFormat('he-IL', {
         day: 'numeric',
         month: 'short',
@@ -29,6 +30,7 @@ interface TaskCommentsProps {
 }
 
 export default function TaskComments({ taskId }: TaskCommentsProps) {
+    const { t } = useTranslation();
     const { user, isAdmin } = useAuth();
     const [comments, setComments] = useState<Comment[]>([]);
     const [newComment, setNewComment] = useState('');
@@ -61,7 +63,7 @@ export default function TaskComments({ taskId }: TaskCommentsProps) {
             const commentsRef = collection(db, 'tasks', taskId, 'comments');
             await addDoc(commentsRef, {
                 text: newComment.trim(),
-                authorName: user.displayName || user.email?.split('@')[0] || 'משתמש',
+                authorName: user.displayName || user.email?.split('@')[0] || t('tasks.defaultUser'),
                 authorEmail: user.email,
                 authorId: user.uid,
                 createdAt: serverTimestamp(),
@@ -77,7 +79,7 @@ export default function TaskComments({ taskId }: TaskCommentsProps) {
     };
 
     const handleDelete = async (commentId: string) => {
-        if (!confirm('האם אתה בטוח שברצונך למחוק הערה זו? פעולה זו תישמר ביומן המערכת.')) return;
+        if (!confirm(t('tasks.deleteCommentConfirm'))) return;
         
         setDeletingCommentId(commentId);
         try {
@@ -97,7 +99,7 @@ export default function TaskComments({ taskId }: TaskCommentsProps) {
             }
         } catch (error) {
             console.error('Error deleting comment:', error);
-            alert('שגיאה במחיקת ההערה');
+            alert(t('tasks.errorDeleteComment'));
         } finally {
             setDeletingCommentId(null);
         }
@@ -109,7 +111,7 @@ export default function TaskComments({ taskId }: TaskCommentsProps) {
             <div className="flex-1 overflow-y-auto p-4 space-y-4 min-h-[200px] max-h-[300px]">
                 {comments.length === 0 ? (
                     <div className="text-center text-slate-500 dark:text-zinc-500 text-sm py-4">
-                        אין עדיין הערות או פעילות
+                        {t('tasks.noCommentsYet')}
                     </div>
                 ) : (
                     comments.map(comment => (
@@ -127,7 +129,7 @@ export default function TaskComments({ taskId }: TaskCommentsProps) {
                                                 {comment.authorName}
                                             </span>
                                             <span className="text-[10px] text-slate-400 dark:text-zinc-500">
-                                                {comment.createdAt?.toDate() ? formatDate(comment.createdAt.toDate()) : 'עכשיו'}
+                                                {comment.createdAt?.toDate() ? formatDate(comment.createdAt.toDate(), t) : t('tasks.now')}
                                             </span>
                                         </div>
                                         {(isAdmin || (user && comment.authorId === user.uid)) && (
@@ -135,7 +137,7 @@ export default function TaskComments({ taskId }: TaskCommentsProps) {
                                                 onClick={() => handleDelete(comment.id)}
                                                 disabled={deletingCommentId === comment.id}
                                                 className="text-slate-400 hover:text-red-500 dark:text-zinc-500 dark:hover:text-red-400 transition-colors mr-2"
-                                                title="מחק הערה"
+                                                title={t('tasks.deleteCommentTooltip')}
                                             >
                                                 {deletingCommentId === comment.id ? (
                                                     <Loader2 className="w-3 h-3 animate-spin" />
@@ -155,7 +157,7 @@ export default function TaskComments({ taskId }: TaskCommentsProps) {
                                 </div>
                                 {comment.isSystemEvent && (
                                     <div className="text-[10px] text-slate-400 dark:text-zinc-500 mt-1">
-                                        {comment.createdAt?.toDate() ? formatDate(comment.createdAt.toDate()) : 'עכשיו'}
+                                        {comment.createdAt?.toDate() ? formatDate(comment.createdAt.toDate(), t) : t('tasks.now')}
                                     </div>
                                 )}
                             </div>
@@ -171,7 +173,7 @@ export default function TaskComments({ taskId }: TaskCommentsProps) {
                         type="text"
                         value={newComment}
                         onChange={(e) => setNewComment(e.target.value)}
-                        placeholder="הוסף הערה..."
+                        placeholder={t('tasks.addCommentPlaceholder')}
                         disabled={isSubmitting}
                         className="flex-1 bg-slate-50 dark:bg-zinc-950 border border-slate-200 dark:border-zinc-800 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:opacity-50"
                         dir="rtl"

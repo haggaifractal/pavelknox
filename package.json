@@ -6,7 +6,12 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "build:standalone": "node -e \"const fs=require('fs'); fs.rmSync('public/_next',{recursive:true,force:true}); fs.rmSync('deploy_public',{recursive:true,force:true});\" && next build",
+    "deploy:prepare-static": "node -e \"const fs=require('fs'); if(fs.existsSync('public')) fs.cpSync('public','deploy_public',{recursive:true}); else fs.mkdirSync('deploy_public',{recursive:true}); fs.mkdirSync('deploy_public/_next/static',{recursive:true}); fs.cpSync('.next/static','deploy_public/_next/static',{recursive:true});\"",
+    "deploy:run": "gcloud run deploy ssrpavelknoxb5781 --source . --region us-central1 --allow-unauthenticated --platform managed --clear-base-image",
+    "deploy:hosting": "firebase deploy --only hosting",
+    "deploy:all": "npm run build:standalone && npm run deploy:prepare-static && npm run deploy:run && npm run deploy:hosting"
   },
   "dependencies": {
     "@google/genai": "^1.46.0",
