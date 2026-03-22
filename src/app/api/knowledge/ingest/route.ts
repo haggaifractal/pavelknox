@@ -14,7 +14,7 @@ export async function POST(req: Request) {
     }
 
     const body = await req.json();
-    const { title, content, type = 'article', sourceUrl = '', clientName = '', tags = [] } = body;
+    const { title, content, type = 'article', sourceUrl = '', clientName = '', tags = [], visibilityScope = 'global', departmentIds = [] } = body;
 
     if (!title || !content) {
       return NextResponse.json({ error: 'Title and content are required' }, { status: 400 });
@@ -43,6 +43,11 @@ export async function POST(req: Request) {
     const collectionRef = adminDb.collection('knowledge_chunks');
     const sourceId = crypto.randomUUID(); // Unique ID representing the parent document
 
+    const deptScopes = Array.isArray(departmentIds) ? [...departmentIds] : [];
+    if (visibilityScope === 'global') {
+      deptScopes.push('GLOBAL');
+    }
+
     chunks.forEach((chunkText, index) => {
       const docRef = collectionRef.doc(); // Auto-generate ID for the chunk
       batch.set(docRef, {
@@ -52,6 +57,9 @@ export async function POST(req: Request) {
         clientName,
         tags,
         sourceUrl,
+        visibilityScope,
+        departmentIds: Array.isArray(departmentIds) ? departmentIds : [],
+        departmentScopes: deptScopes,
         content: chunkText, // Keep the original text for the UI, but the vector represents the enriched text
         // In Firestore, vectors are saved via FieldValue.vector
         embedding: FieldValue.vector(embeddings[index]),

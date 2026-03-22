@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { adminDb } from '@/lib/firebase/admin';
-import { FieldValue } from 'firebase-admin/firestore';
+import { FieldValue, Filter } from 'firebase-admin/firestore';
 import { generateEmbedding } from '@/lib/ai/embeddings';
 import { verifyAuth } from '@/lib/firebase/serverAuth';
 import { OpenAI, AzureOpenAI } from 'openai';
@@ -58,6 +58,11 @@ export async function POST(req: Request) {
     const userDocRef = adminDb.collection('users').doc(auth.uid);
     const userDoc = await userDocRef.get();
     const userData = userDoc.data() || {};
+    
+    const userRole = userData.role || 'viewer';
+    const isSuperAdmin = userRole === 'superadmin' || auth.email === 'chagai33@gmail.com';
+    const userDepts = Array.isArray(userData.departmentIds) ? userData.departmentIds : [];
+    const searchScopes = isSuperAdmin ? null : [...userDepts, 'GLOBAL'];
     
     // Default config fallback: 50,000 tokens
     const tokensUsedThisMonth = userData.tokensUsedThisMonth || 0;
@@ -166,8 +171,13 @@ CRITICAL RULES FOR FINAL ANSWER:
             if (functionName === "search_knowledge_base") {
                 const searchQuery = functionArgs.search_query || query;
                 const queryEmbedding = await generateEmbedding(searchQuery);
-                const coll = adminDb.collection("knowledge_chunks");
-                const snapshot = await coll.findNearest('embedding', FieldValue.vector(queryEmbedding), {
+                
+                let queryRef: any = adminDb.collection("knowledge_chunks");
+                if (searchScopes) {
+                    queryRef = queryRef.where('departmentScopes', 'array-contains-any', searchScopes);
+                }
+
+                const snapshot = await queryRef.findNearest('embedding', FieldValue.vector(queryEmbedding), {
                     limit: 5,
                     distanceMeasure: 'COSINE'
                 }).get();
@@ -184,8 +194,19 @@ CRITICAL RULES FOR FINAL ANSWER:
                 contextUsed += matchedDocs.length;
             } 
             else if (functionName === "get_open_tasks") {
-                const tasksRef = adminDb.collection("tasks").where('status', 'in', ['pending', 'in_progress']);
-                const tasksSnapshot = await tasksRef.get();
+                let tasksRef: any = adminDb.collection("tasks").where('status', 'in', ['pending', 'in_progress']);
+                
+                if (!isSuperAdmin) {
+                    tasksRef = tasksRef.where(
+                        Filter.or(
+                            Filter.where('visibilityScope', '==', 'global'),
+                            Filter.where('departmentIds', 'array-contains-any', userDepts.length > 0 ? userDepts : ['__NON_EXISTENT__'])
+                        )
+                    );
+                }
+
+                // Protect Node memory: cap to 100 before fuzzy matching
+                const tasksSnapshot = await tasksRef.limit(100).get();
                 let matchedTasks = tasksSnapshot.docs.map((d: any) => ({ id: d.id, ...d.data() }));
 
                 // Perform fuzzy matching in memory

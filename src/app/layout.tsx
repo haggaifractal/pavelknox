@@ -4,6 +4,7 @@ import "./globals.css";
 import { AuthProvider } from "@/lib/contexts/AuthContext";
 import { ThemeProvider } from "@/components/ThemeProvider";
 import { LanguageProvider } from "@/lib/contexts/LanguageContext";
+console.log("1forcing new deploy hash v2");
 
 const assistant = Assistant({
   subsets: ["hebrew", "latin"],

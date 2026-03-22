@@ -3,6 +3,7 @@ import { adminDb } from '@/lib/firebase/admin';
 import { getFileUrl, downloadFileAsBuffer } from '@/services/telegram/client';
 import { transcribeAudio } from '@/services/ai/whisper';
 import { extractAndRedactKnowledge } from '@/services/ai/gpt';
+import crypto from 'crypto';
 
 export const dynamic = 'force-dynamic';
 
@@ -197,8 +198,23 @@ export async function POST(request: Request) {
 
         // בטיחות: וידוא טוקן סודי מטלגרם שרק אנחנו מכירים
         const secretToken = request.headers.get('x-telegram-bot-api-secret-token');
-        if (process.env.TELEGRAM_WEBHOOK_SECRET && secretToken !== process.env.TELEGRAM_WEBHOOK_SECRET) {
-            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+        const envSecret = process.env.TELEGRAM_WEBHOOK_SECRET;
+
+        if (envSecret) {
+            if (!secretToken) {
+                console.warn('Unauthorized telegram webhook attempt: Missing signature');
+                return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+            }
+            try {
+                const tokenBuffer = Buffer.from(secretToken, 'utf8');
+                const secretBuffer = Buffer.from(envSecret, 'utf8');
+                if (tokenBuffer.length !== secretBuffer.length || !crypto.timingSafeEqual(tokenBuffer, secretBuffer)) {
+                    console.warn('Unauthorized telegram webhook attempt: Invalid signature');
+                    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+                }
+            } catch (e) {
+                return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+            }
         }
 
         // Deduplication (Idempotency) Check using Telegram's update_id

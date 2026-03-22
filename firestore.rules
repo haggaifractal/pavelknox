@@ -74,22 +74,55 @@ service cloud.firestore {
       return isAdmin() || hasPermission('canDeleteTasks');
     }
 
+    function hasDepartmentAccess(resourceData) {
+      let data = resourceData;
+      let userData = getUserData();
+      let userDepts = userData.keys().hasAny(['departmentIds']) ? userData.departmentIds : [];
+      // Treat missing visibility as global only for read fallbacks
+      let isGlobal = !data.keys().hasAny(['visibilityScope']) || data.visibilityScope == 'global';
+      let hasDepts = data.keys().hasAny(['departmentIds']) && data.departmentIds.size() > 0;
+      return isGlobal || !hasDepts || (userDepts.hasAny(data.departmentIds));
+    }
+
+    function isValidDepartmentAssignment(resourceData, isUpdate) {
+      let data = resourceData;
+      let isGlobal = data.keys().hasAny(['visibilityScope']) && data.visibilityScope == 'global';
+      let userData = getUserData();
+      let userDepts = userData.keys().hasAny(['departmentIds']) ? userData.departmentIds : [];
+      
+      let hasAssignedDepts = data.keys().hasAny(['departmentIds']);
+      let assignedDepts = hasAssignedDepts ? data.departmentIds : [];
+      
+      if (isAdmin()) return true;
+      if (isGlobal) return false;
+      
+      if (hasAssignedDepts) {
+        return assignedDepts.size() > 0 && userDepts.hasAll(assignedDepts);
+      }
+      
+      // Prevent maliciously creating department-less tasks to force global visibility.
+      // Allow omission ONLY when updating a legacy task that already lacked departments.
+      return isUpdate;
+    }
+
     // ------------------------------------------------------------------------
     // Collection Rules
     // ------------------------------------------------------------------------
 
     // Inboxes and Drafts: Knowledge Control Center access
     match /raw_inputs/{document=**} {
-      allow read, write: if canAccessKnowledgeControl();
+      allow read: if canAccessKnowledgeControl() && (isSuperAdmin() || hasDepartmentAccess(resource.data));
+      allow write: if canAccessKnowledgeControl();
     }
 
     match /drafts/{document=**} {
-      allow read, write: if canAccessKnowledgeControl();
+      allow read: if canAccessKnowledgeControl() && (isSuperAdmin() || hasDepartmentAccess(resource.data));
+      allow write: if canAccessKnowledgeControl();
     }
 
     // Knowledge Base: Viewable by anyone with access, but only written by Knowledge Control
     match /knowledge_base/{document=**} {
-      allow read: if isViewer();
+      allow read: if isViewer() && (isSuperAdmin() || hasDepartmentAccess(resource.data));
       allow write: if canAccessKnowledgeControl();
     }
 
@@ -101,11 +134,14 @@ service cloud.firestore {
 
     // Tasks: Action items
     match /tasks/{taskId} {
-      allow read: if isViewer();
+      allow read: if isViewer() && (isSuperAdmin() || hasDepartmentAccess(resource.data));
       allow create: if canCreateTasks() &&
+                   isValidDepartmentAssignment(request.resource.data, false) &&
                    (!request.resource.data.keys().hasAny(['title']) || request.resource.data.title.size() <= 100) &&
                    (!request.resource.data.keys().hasAny(['description']) || request.resource.data.description.size() <= 1000);
-      allow update: if isViewer() &&
+      allow update: if isViewer() && 
+                   (isSuperAdmin() || hasDepartmentAccess(resource.data)) &&
+                   isValidDepartmentAssignment(request.resource.data, true) &&
                    (!request.resource.data.keys().hasAny(['title']) || request.resource.data.title.size() <= 100) &&
                    (!request.resource.data.keys().hasAny(['description']) || request.resource.data.description.size() <= 1000);
       allow delete: if canDeleteTasks();
@@ -119,7 +155,7 @@ service cloud.firestore {
 
     // Clients: Global client list. Readable by viewers, writable by admins. Participants can create explicitly from drafts.
     match /clients/{document=**} {
-      allow read: if isViewer();
+      allow read: if isViewer() && (isSuperAdmin() || hasDepartmentAccess(resource.data));
       allow create: if (isAdmin() || canAccessKnowledgeControl()) &&
                    (!request.resource.data.keys().hasAny(['name']) || request.resource.data.name == null || request.resource.data.name.size() <= 100) &&
                    (!request.resource.data.keys().hasAny(['phone']) || request.resource.data.phone == null || request.resource.data.phone.size() <= 20) &&

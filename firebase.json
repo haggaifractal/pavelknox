@@ -9,12 +9,7 @@
       "**/.*",
       "**/node_modules/**"
     ],
-    "rewrites": [
-      {
-        "source": "**",
-        "function": "ssrpavelknoxb5781"
-      }
-    ],
+
     "frameworksBackend": {
       "region": "us-central1"
     }
