@@ -82,6 +82,13 @@ export default function AdminAuditPage() {
             'UPDATE_TOKEN_LIMIT': 'bg-amber-50 text-amber-700 dark:bg-amber-500/10 dark:text-amber-400',
             'DELETE_KNOWLEDGE': 'bg-orange-50 text-orange-700 dark:bg-orange-500/10 dark:text-orange-400',
             'DELETE_TASK': 'bg-red-50 text-red-700 dark:bg-red-500/10 dark:text-red-400',
+            'DELETE_CLIENT': 'bg-pink-50 text-pink-700 dark:bg-pink-500/10 dark:text-pink-400',
+            'LOGIN': 'bg-teal-50 text-teal-700 dark:bg-teal-500/10 dark:text-teal-400',
+            'UPDATE_USER': 'bg-cyan-50 text-cyan-700 dark:bg-cyan-500/10 dark:text-cyan-400',
+            'CREATE_USER': 'bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-400',
+            'DELETE_USER': 'bg-rose-50 text-rose-700 dark:bg-rose-500/10 dark:text-rose-400',
+            'GENERATE_RESET_LINK': 'bg-indigo-50 text-indigo-700 dark:bg-indigo-500/10 dark:text-indigo-400',
+            'CLEANUP_ORPHANS': 'bg-slate-100 text-slate-700 dark:bg-slate-500/10 dark:text-slate-400',
         };
 
         const labels: Record<string, string> = {
@@ -93,6 +100,12 @@ export default function AdminAuditPage() {
             'DELETE_KNOWLEDGE': t('audit.actionTypes.DELETE_KNOWLEDGE'),
             'DELETE_TASK': t('audit.actionTypes.DELETE_TASK'),
             'DELETE_CLIENT': t('audit.actionTypes.DELETE_CLIENT'),
+            'LOGIN': t('audit.actionTypes.LOGIN'),
+            'UPDATE_USER': t('audit.actionTypes.UPDATE_USER'),
+            'CREATE_USER': t('audit.actionTypes.CREATE_USER'),
+            'DELETE_USER': t('audit.actionTypes.DELETE_USER'),
+            'GENERATE_RESET_LINK': t('audit.actionTypes.GENERATE_RESET_LINK'),
+            'CLEANUP_ORPHANS': t('audit.actionTypes.CLEANUP_ORPHANS'),
         };
 
         return (
@@ -190,11 +203,23 @@ export default function AdminAuditPage() {
                             className="w-full h-full px-4 py-3.5 bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 rounded-2xl text-sm font-medium focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 outline-none transition-all appearance-none dark:text-zinc-100 cursor-pointer"
                         >
                             <option value="ALL">{t('audit.filterAll')}</option>
+                            <option disabled className="font-bold text-[10px] bg-slate-50 text-slate-400 dark:bg-zinc-800 dark:text-zinc-500 uppercase py-1 mt-2">-- {t('audit.filterUsers')} --</option>
+                            <option value="LOGIN">{t('audit.actionTypes.LOGIN')}</option>
+                            <option value="CREATE_USER">{t('audit.actionTypes.CREATE_USER')}</option>
+                            <option value="UPDATE_USER">{t('audit.actionTypes.UPDATE_USER')}</option>
+                            <option value="DELETE_USER">{t('audit.actionTypes.DELETE_USER')}</option>
+                            <option value="GENERATE_RESET_LINK">{t('audit.actionTypes.GENERATE_RESET_LINK')}</option>
+
+                            <option disabled className="font-bold text-[10px] bg-slate-50 text-slate-400 dark:bg-zinc-800 dark:text-zinc-500 uppercase py-1 mt-2">-- {t('audit.filterKnowledge')} --</option>
                             <option value="BOT_DRAFT_CREATED">{t('audit.filterBotDraft')}</option>
                             <option value="APPROVED_DRAFT">{t('audit.filterApprove')}</option>
                             <option value="DELETED_DRAFT">{t('audit.filterDelete')}</option>
-                            <option value="UPDATE_TOKEN_LIMIT">{t('audit.filterTokens')}</option>
+                            <option value="MERGED_DRAFTS">{t('audit.actionTypes.MERGED_DRAFTS')}</option>
                             <option value="DELETE_KNOWLEDGE">{t('audit.filterKnowledge')}</option>
+
+                            <option disabled className="font-bold text-[10px] bg-slate-50 text-slate-400 dark:bg-zinc-800 dark:text-zinc-500 uppercase py-1 mt-2">-- {t('audit.filterSystem')} --</option>
+                            <option value="UPDATE_TOKEN_LIMIT">{t('audit.filterTokens')}</option>
+                            <option value="CLEANUP_ORPHANS">{t('audit.actionTypes.CLEANUP_ORPHANS')}</option>
                         </select>
                         <div className="absolute left-4 top-1/2 -translate-y-1/2 pointer-events-none opacity-50">
                             <ChevronDown className="w-4 h-4" />

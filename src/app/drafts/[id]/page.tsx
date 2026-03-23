@@ -26,7 +26,7 @@ export default function DraftEditorPage({ params }: EditorPageProps) {
     const resolvedParams = use(params);
     const draftId = resolvedParams.id;
     const router = useRouter();
-    const { user, isAdmin, loading: authLoading } = useAuth();
+    const { user, isAdmin, isSuperAdmin, departmentIds, loading: authLoading } = useAuth();
     const { t } = useTranslation();
 
     const [draft, setDraft] = useState<Draft | null>(null);
@@ -37,7 +37,7 @@ export default function DraftEditorPage({ params }: EditorPageProps) {
     const [status, setStatus] = useState<'pending' | 'in_progress' | 'approved' | 'rejected'>('pending');
     const [tags, setTags] = useState<string[]>([]);
     const [visibilityScope, setVisibilityScope] = useState<'global'|'department'>('global');
-    const [departmentIds, setDepartmentIds] = useState<string[]>([]);
+    const [departmentIdsState, setDepartmentIdsState] = useState<string[]>([]);
     
     // UI state
     const [loading, setLoading] = useState(true);
@@ -59,6 +59,17 @@ export default function DraftEditorPage({ params }: EditorPageProps) {
 
                 if (docSnap.exists()) {
                     const data = docSnap.data();
+                    
+                    const isGlobal = !data.visibilityScope || data.visibilityScope === 'global';
+                    const userDeptIds = departmentIds || [];
+                    const hasIntersection = data.departmentIds?.some((id: string) => userDeptIds.includes(id));
+                    const canView = isSuperAdmin || isGlobal || hasIntersection;
+
+                    if (!canView) {
+                        router.push('/drafts');
+                        return;
+                    }
+
                     setDraft({ id: docSnap.id, ...data } as Draft);
                     setContent(data.editedText || data.content || data.redactedText || data.summary || data.text || '');
                     setTitle(data.title || '');
@@ -66,7 +77,7 @@ export default function DraftEditorPage({ params }: EditorPageProps) {
                     setTags(data.tags || []);
                     setStatus(data.status || 'pending');
                     setVisibilityScope(data.visibilityScope || 'global');
-                    setDepartmentIds(data.departmentIds || []);
+                    setDepartmentIdsState(data.departmentIds || []);
                 } else {
                     setError(t('editor.errorNotFound'));
                 }
@@ -87,7 +98,7 @@ export default function DraftEditorPage({ params }: EditorPageProps) {
             if (!draft || loading || !isAdmin) return;
 
             const tagsChanged = JSON.stringify(tags) !== JSON.stringify((draft as any).tags || []);
-            const depsChanged = JSON.stringify(departmentIds) !== JSON.stringify((draft as any).departmentIds || []);
+            const depsChanged = JSON.stringify(departmentIdsState) !== JSON.stringify((draft as any).departmentIds || []);
             if (content !== (draft as any).editedText || title !== (draft as any).title || clientName !== (draft as any).clientName || status !== (draft as any).status || tagsChanged || visibilityScope !== (draft as any).visibilityScope || depsChanged) {
                 setSaving(true);
                 try {
@@ -98,10 +109,10 @@ export default function DraftEditorPage({ params }: EditorPageProps) {
                         tags: tags,
                         status: status,
                         visibilityScope: visibilityScope,
-                        departmentIds: departmentIds,
+                        departmentIds: departmentIdsState,
                         lastSavedAt: new Date()
                     }, { merge: true });
-                    setDraft(prev => prev ? { ...prev, editedText: content, title: title, clientName: clientName, tags: tags, status: status, visibilityScope, departmentIds } as any : prev);
+                    setDraft(prev => prev ? { ...prev, editedText: content, title: title, clientName: clientName, tags: tags, status: status, visibilityScope, departmentIds: departmentIdsState } as any : prev);
                 } catch (e) {
                     console.error("Auto-save failed", e);
                 } finally {
@@ -111,7 +122,7 @@ export default function DraftEditorPage({ params }: EditorPageProps) {
         }, 1500);
 
         return () => clearTimeout(timeoutId);
-    }, [content, title, clientName, tags, status, draft, draftId, loading, isAdmin]);
+    }, [content, title, clientName, tags, status, draft, draftId, loading, isAdmin, visibilityScope, departmentIdsState]);
 
     const handlePublish = async () => {
         if (!title.trim() || !content.trim()) {
@@ -162,7 +173,7 @@ export default function DraftEditorPage({ params }: EditorPageProps) {
                 sourceDraftId: draftId,
                 publishedAt: publishDate,
                 visibilityScope: visibilityScope,
-                departmentIds: departmentIds
+                departmentIds: departmentIdsState
             });
 
             // Update associated tasks to point to the new knowledge base document
@@ -177,7 +188,7 @@ export default function DraftEditorPage({ params }: EditorPageProps) {
                             sourceUrl: `/knowledge/${kbDocRef.id}`,
                             clientName: clientName,
                             visibilityScope: visibilityScope,
-                            departmentIds: departmentIds,
+                            departmentIds: departmentIdsState,
                             updatedAt: new Date()
                         })
                     );
@@ -205,7 +216,7 @@ export default function DraftEditorPage({ params }: EditorPageProps) {
                         type: 'approved_draft',
                         sourceUrl: `/knowledge/${kbDocRef.id}`,
                         visibilityScope: visibilityScope,
-                        departmentIds: departmentIds
+                        departmentIds: departmentIdsState
                     })
                 });
                 if (!ingestRes.ok) {
@@ -428,8 +439,8 @@ export default function DraftEditorPage({ params }: EditorPageProps) {
                                     {visibilityScope === 'department' && (
                                         <div className="w-[200px] z-10">
                                             <DepartmentSelector 
-                                                selectedIds={departmentIds} 
-                                                onChange={setDepartmentIds} 
+                                                selectedIds={departmentIdsState} 
+                                                onChange={setDepartmentIdsState} 
                                                 placeholder={t('editor.departmentPlaceholder') || 'בחר מחלקות...'}
                                             />
                                         </div>

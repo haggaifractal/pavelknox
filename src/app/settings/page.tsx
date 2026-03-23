@@ -4,7 +4,7 @@ import React, { useEffect, useState } from 'react';
 import { useAuth } from '@/lib/contexts/AuthContext';
 import { useTranslation } from '@/lib/contexts/LanguageContext';
 import { auth } from '@/lib/firebase/client';
-import { Mail, Plus, ArrowLeft, Copy, Check, ShieldAlert, Trash2 } from 'lucide-react';
+import { Mail, Plus, ArrowLeft, Copy, Check, ShieldAlert, Trash2, Key, ChevronDown, ChevronRight } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import DepartmentsManager from '@/components/settings/DepartmentsManager';
 import DepartmentSelector from '@/components/ui/DepartmentSelector';
@@ -14,6 +14,9 @@ interface UserData {
   email: string;
   displayName: string;
   role: 'superadmin' | 'admin' | 'viewer';
+  firstName?: string;
+  lastName?: string;
+  phone?: string;
   departmentIds?: string[];
   telegramChatId?: string;
   lastLoginAt?: string;
@@ -44,6 +47,23 @@ const TelegramIdInput = ({ initialValue, onSave, placeholder }: { initialValue: 
     );
 }
 
+const SimpleInput = ({ initialValue, onSave, placeholder, type = 'text', className = '' }: { initialValue: string; onSave: (val: string) => void; placeholder: string, type?: string, className?: string }) => {
+    const [value, setValue] = useState(initialValue);
+    useEffect(() => { setValue(initialValue); }, [initialValue]);
+    const handleSave = () => { if (value !== initialValue) onSave(value); };
+    return (
+        <input
+            type={type}
+            value={value}
+            onChange={(e) => setValue(e.target.value)}
+            onBlur={handleSave}
+            onKeyDown={(e) => { if (e.key === 'Enter') handleSave(); }}
+            placeholder={placeholder}
+            className={`bg-transparent border border-slate-200 dark:border-zinc-700 rounded p-1 outline-none focus:ring-2 focus:ring-indigo-500 w-full text-sm ${className}`}
+        />
+    );
+}
+
 export default function SettingsPage() {
   const { isSuperAdmin, user: currentUser, loading: authLoading } = useAuth();
   const { t, language } = useTranslation();
@@ -55,6 +75,9 @@ export default function SettingsPage() {
   const [error, setError] = useState('');
   
   const [inviteEmail, setInviteEmail] = useState('');
+  const [inviteFirstName, setInviteFirstName] = useState('');
+  const [inviteLastName, setInviteLastName] = useState('');
+  const [invitePhone, setInvitePhone] = useState('');
   const [inviteRole, setInviteRole] = useState<'admin' | 'viewer'>('viewer');
   const [inviteDepartmentIds, setInviteDepartmentIds] = useState<string[]>([]);
   const [inviteTelegramId, setInviteTelegramId] = useState('');
@@ -62,6 +85,12 @@ export default function SettingsPage() {
   const [inviteResult, setInviteResult] = useState('');
   const [inviteLink, setInviteLink] = useState('');
   const [copied, setCopied] = useState(false);
+
+  // Table row expansion
+  const [expandedUser, setExpandedUser] = useState<string | null>(null);
+  
+  // Tracking which user's reset link was copied
+  const [copiedResetLink, setCopiedResetLink] = useState<string | null>(null);
 
   useEffect(() => {
     if (authLoading) return;
@@ -77,7 +106,8 @@ export default function SettingsPage() {
       if (showLoading) setLoading(true);
       const token = await currentUser?.getIdToken();
       const res = await fetch('/api/users', {
-        headers: { Authorization: `Bearer ${token}` }
+        headers: { Authorization: `Bearer ${token}` },
+        cache: 'no-store'
       });
       if (!res.ok) throw new Error(t('settings.errorFetch'));
       const data = await res.json();
@@ -106,8 +136,10 @@ export default function SettingsPage() {
         },
         body: JSON.stringify({ 
           email: inviteEmail, 
+          firstName: inviteFirstName,
+          lastName: inviteLastName,
+          phone: invitePhone,
           role: inviteRole, 
-          displayName: inviteEmail.split('@')[0],
           departmentIds: inviteDepartmentIds,
           telegramChatId: inviteTelegramId
         })
@@ -117,6 +149,9 @@ export default function SettingsPage() {
       setInviteResult(t('settings.inviteSuccess'));
       setInviteLink(data.resetLink);
       setInviteEmail('');
+      setInviteFirstName('');
+      setInviteLastName('');
+      setInvitePhone('');
       setInviteDepartmentIds([]);
       setInviteTelegramId('');
       fetchUsers();
@@ -183,16 +218,32 @@ export default function SettingsPage() {
       const token = await currentUser?.getIdToken();
       const res = await fetch(`/api/users/${uid}`, {
         method: 'PATCH',
-        headers: { 
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}` 
-        },
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({ telegramChatId: newId })
       });
       if (!res.ok) throw new Error(t('settings.errorUpdateTelegram'));
       fetchUsers(false);
     } catch (err: any) {
       setUsers(previousUsers); // Revert
+      alert(err.message);
+    }
+  };
+
+  const handleFieldChange = async (uid: string, field: string, value: string) => {
+    const previousUsers = [...users];
+    setUsers(users.map(u => u.uid === uid ? { ...u, [field]: value } : u));
+    
+    try {
+      const token = await currentUser?.getIdToken();
+      const res = await fetch(`/api/users/${uid}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ [field]: value })
+      });
+      if (!res.ok) throw new Error(`Failed to update ${field}`);
+      fetchUsers(false);
+    } catch (err: any) {
+      setUsers(previousUsers);
       alert(err.message);
     }
   };
@@ -214,6 +265,24 @@ export default function SettingsPage() {
       fetchUsers(false);
     } catch (err: any) {
       setUsers(previousUsers); // Revert
+      alert(err.message);
+    }
+  };
+
+  const handleGenerateResetLink = async (uid: string) => {
+    try {
+      const token = await currentUser?.getIdToken();
+      const res = await fetch(`/api/users/${uid}/reset-link`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || t('settings.errorResetLink'));
+      
+      await navigator.clipboard.writeText(data.resetLink);
+      setCopiedResetLink(uid);
+      setTimeout(() => setCopiedResetLink(null), 2000);
+    } catch (err: any) {
       alert(err.message);
     }
   };
@@ -258,8 +327,8 @@ export default function SettingsPage() {
         <section className="bg-white dark:bg-zinc-900 p-6 border border-slate-200 dark:border-zinc-800 rounded-2xl shadow-sm">
           <h2 className="text-lg font-bold mb-4 flex items-center gap-2"><Plus className="w-5 h-5 text-indigo-500"/> {t('settings.modalInviteTitle')}</h2>
           <form onSubmit={handleInvite} className="flex flex-col sm:flex-row gap-4 items-end">
-            <div className="flex-1 w-full relative">
-              <label className="block tracking-wide text-xs font-semibold mb-2 text-slate-500">{t('settings.emailLabel')}</label>
+            <div className="flex-1 w-full sm:w-1/3 relative">
+              <label className="block tracking-wide text-xs font-semibold mb-2 text-slate-500">{t('settings.emailLabel') || 'Email'}</label>
               <div className="relative">
                 <input 
                   type="email" 
@@ -267,11 +336,44 @@ export default function SettingsPage() {
                   value={inviteEmail}
                   onChange={(e) => setInviteEmail(e.target.value)}
                   className="w-full pl-10 pr-4 py-2 bg-slate-50 dark:bg-zinc-950 border border-slate-200 dark:border-zinc-800 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none" 
-                  placeholder="colleague@company.com"
+                  placeholder="name@company.com"
                 />
                 <Mail className={`w-5 h-5 text-slate-400 absolute top-2.5 ${dir === 'rtl' ? 'right-3' : 'left-3'}`} />
               </div>
             </div>
+            
+            <div className="w-full sm:w-1/4">
+              <label className="block tracking-wide text-xs font-semibold mb-2 text-slate-500">{t('settings.firstNameLabel') || 'First Name'}</label>
+              <input 
+                type="text" required
+                value={inviteFirstName} onChange={(e) => setInviteFirstName(e.target.value)}
+                className="w-full px-4 py-2 bg-slate-50 dark:bg-zinc-950 border border-slate-200 dark:border-zinc-800 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none"
+                placeholder="First Name"
+              />
+            </div>
+
+            <div className="w-full sm:w-1/4">
+              <label className="block tracking-wide text-xs font-semibold mb-2 text-slate-500">{t('settings.lastNameLabel') || 'Last Name'}</label>
+              <input 
+                type="text" required
+                value={inviteLastName} onChange={(e) => setInviteLastName(e.target.value)}
+                className="w-full px-4 py-2 bg-slate-50 dark:bg-zinc-950 border border-slate-200 dark:border-zinc-800 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none"
+                placeholder="Last Name"
+              />
+            </div>
+
+            <div className="w-full sm:w-1/4">
+              <label className="block tracking-wide text-xs font-semibold mb-2 text-slate-500">{t('settings.phoneLabel') || 'Phone'}</label>
+              <input 
+                type="text" 
+                value={invitePhone} onChange={(e) => setInvitePhone(e.target.value)}
+                className="w-full px-4 py-2 bg-slate-50 dark:bg-zinc-950 border border-slate-200 dark:border-zinc-800 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none"
+                placeholder="05..."
+              />
+            </div>
+          </form>
+          
+          <form onSubmit={handleInvite} className="flex flex-col sm:flex-row gap-4 items-end mt-4">
             <div className="w-full sm:w-48">
               <label className="block tracking-wide text-xs font-semibold mb-2 text-slate-500">{t('settings.roleLabel')}</label>
               <select 
@@ -352,38 +454,48 @@ export default function SettingsPage() {
               <table className="w-full text-sm text-left rtl:text-right">
                 <thead className="text-xs uppercase bg-slate-50 dark:bg-zinc-950/50 text-slate-500 font-semibold border-b border-slate-200 dark:border-zinc-800">
                   <tr>
+                    <th className="w-12 px-2 py-4 text-center"></th>
                     <th className="px-6 py-4">{t('settings.tableEmail')}</th>
-                    <th className="px-6 py-4 w-40">{t('settings.tableTelegramId')}</th>
                     <th className="px-6 py-4 w-40">{t('settings.tableRole')}</th>
                     <th className="px-6 py-4 w-64 hidden sm:table-cell">{t('settings.tableDepartments')}</th>
-                    <th className="px-6 py-4 hidden md:table-cell">{t('settings.tableLastLogin')}</th>
+                    <th className="px-6 py-4 hidden xl:table-cell">{t('settings.tableLastLogin')}</th>
                     <th className="px-6 py-4 w-24 text-center">{t('settings.tableActions')}</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 dark:divide-zinc-800">
-                  {users.map(u => (
-                    <tr key={u.uid} className="hover:bg-slate-50 dark:hover:bg-zinc-800/50 transition-colors">
-                      <td className="px-6 py-4 font-medium flex items-center gap-3">
-                        <div className="w-8 h-8 rounded-full bg-indigo-100 dark:bg-indigo-900/30 flex items-center justify-center text-indigo-600 dark:text-indigo-400 font-bold uppercase">
+                  {users.map(u => {
+                    const isExpanded = expandedUser === u.uid;
+                    return (
+                    <React.Fragment key={u.uid}>
+                    <tr className="hover:bg-slate-50 dark:hover:bg-zinc-800/50 transition-colors">
+                      <td className="px-2 py-4 text-center">
+                        <button 
+                          onClick={() => setExpandedUser(isExpanded ? null : u.uid)}
+                          className="p-1 rounded-md text-slate-400 hover:text-indigo-500 hover:bg-indigo-50 dark:hover:bg-indigo-900/30 transition-colors focus:outline-none"
+                          title={isExpanded ? t('settings.collapseDetails') : t('settings.expandDetails')}
+                        >
+                          {isExpanded ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className={`w-4 h-4 ${dir === 'rtl' ? 'rotate-180' : ''}`} />}
+                        </button>
+                      </td>
+                      <td className="px-6 py-4 font-medium flex items-center gap-3 relative group">
+                        <div className="w-8 h-8 shrink-0 rounded-full bg-indigo-100 dark:bg-indigo-900/30 flex items-center justify-center text-indigo-600 dark:text-indigo-400 font-bold uppercase">
                           {u.email.charAt(0)}
                         </div>
-                        <div>
-                           <div>{u.email}</div>
-                           <div className="text-xs text-slate-400">{u.uid}</div>
+                        <div className="w-48 truncate cursor-pointer" title={t('settings.expandDetails')} onClick={() => setExpandedUser(isExpanded ? null : u.uid)}>
+                           <div className="truncate font-semibold text-slate-800 dark:text-zinc-200">
+                             {u.firstName || u.lastName ? `${u.firstName || ''} ${u.lastName || ''}`.trim() : u.email}
+                           </div>
+                           {(u.firstName || u.lastName) && (
+                             <div className="text-xs text-slate-500 dark:text-zinc-400 truncate">{u.email}</div>
+                           )}
+                           <div className="absolute left-14 -bottom-4 hidden group-hover:block bg-slate-800 text-white text-[10px] px-2 py-0.5 rounded shadow-lg z-50 whitespace-nowrap">UID: {u.uid}</div>
                         </div>
-                      </td>
-                      <td className="px-6 py-4">
-                        <TelegramIdInput
-                          initialValue={u.telegramChatId || ''}
-                          onSave={(val) => handleTelegramIdChange(u.uid, val)}
-                          placeholder={t('settings.telegramIdPlaceholder') || 'ID...'}
-                        />
                       </td>
                       <td className="px-6 py-4">
                         <select 
                           value={u.role}
                           onChange={(e) => handleRoleChange(u.uid, e.target.value)}
-                          disabled={u.uid === currentUser?.uid} // can't change own role easily here to prevent lockout
+                          disabled={u.uid === currentUser?.uid}
                           className="bg-transparent border border-slate-200 dark:border-zinc-700 rounded p-1 outline-none focus:ring-2 focus:ring-indigo-500 w-full"
                         >
                           <option value="superadmin">{t('settings.roleSuperAdmin')}</option>
@@ -392,7 +504,7 @@ export default function SettingsPage() {
                         </select>
                       </td>
                       <td className="px-6 py-4 hidden sm:table-cell">
-                         <div className="w-full relative z-10 w-48 lg:w-full">
+                         <div className="w-full relative z-10 lg:w-full">
                            <DepartmentSelector
                              selectedIds={u.departmentIds || []}
                              onChange={(ids) => handleDepartmentChange(u.uid, ids)}
@@ -401,23 +513,90 @@ export default function SettingsPage() {
                            />
                          </div>
                       </td>
-                      <td className="px-6 py-4 hidden md:table-cell text-slate-500">
-                         {u.lastLoginAt ? new Intl.DateTimeFormat(language === 'he' ? 'he-IL' : 'en-US').format(new Date(u.lastLoginAt)) : t('settings.never')}
-                      </td>
+                      <td className="px-6 py-4 hidden xl:table-cell text-slate-500 whitespace-nowrap">
+                         {u.lastLoginAt ? new Intl.DateTimeFormat(language === 'he' ? 'he-IL' : 'en-US', { dateStyle: 'short', timeStyle: 'short' }).format(new Date(u.lastLoginAt)) : t('settings.never')}
+                       </td>
                       <td className="px-6 py-4 text-center">
-                         {u.uid !== currentUser?.uid && (
+                         <div className="flex items-center justify-center gap-2">
                            <button 
-                             onClick={() => handleDelete(u.uid)}
-                             className="p-2 text-slate-400 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/30 rounded-lg transition-colors"
-                             aria-label={t('settings.btnDelete')}
-                             title={t('settings.btnDelete')}
+                             onClick={() => handleGenerateResetLink(u.uid)}
+                             className={`p-2 rounded-lg transition-colors ${copiedResetLink === u.uid ? 'text-emerald-500 bg-emerald-50 dark:bg-emerald-950/30' : 'text-slate-400 hover:text-emerald-500 hover:bg-emerald-50 dark:hover:bg-emerald-950/30'}`}
+                             aria-label={t('settings.btnResetPassword')}
+                             title={t('settings.btnResetPassword')}
                            >
-                             <Trash2 className="w-4 h-4" />
+                             {copiedResetLink === u.uid ? <Check className="w-4 h-4" /> : <Key className="w-4 h-4" />}
                            </button>
-                         )}
+                           {u.uid !== currentUser?.uid && (
+                             <button 
+                               onClick={() => handleDelete(u.uid)}
+                               className="p-2 text-slate-400 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/30 rounded-lg transition-colors"
+                               aria-label={t('settings.btnDelete')}
+                               title={t('settings.btnDelete')}
+                             >
+                               <Trash2 className="w-4 h-4" />
+                             </button>
+                           )}
+                         </div>
                       </td>
                     </tr>
-                  ))}
+                    {isExpanded && (
+                      <tr className="bg-slate-50/50 dark:bg-zinc-900/30 border-t border-slate-100 dark:border-zinc-800">
+                        <td colSpan={6} className="px-6 py-6">
+                           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+                             <div>
+                               <label className="block tracking-wide text-xs font-semibold mb-2 text-slate-500">{t('settings.firstNameLabel') || 'First Name'}</label>
+                               <SimpleInput
+                                 initialValue={u.firstName || ''}
+                                 onSave={(val) => handleFieldChange(u.uid, 'firstName', val)}
+                                 placeholder="First Name"
+                               />
+                             </div>
+                             <div>
+                               <label className="block tracking-wide text-xs font-semibold mb-2 text-slate-500">{t('settings.lastNameLabel') || 'Last Name'}</label>
+                               <SimpleInput
+                                 initialValue={u.lastName || ''}
+                                 onSave={(val) => handleFieldChange(u.uid, 'lastName', val)}
+                                 placeholder="Last Name"
+                               />
+                             </div>
+                             <div>
+                               <label className="block tracking-wide text-xs font-semibold mb-2 text-slate-500">{t('settings.phoneLabel') || 'Phone'}</label>
+                               {u.phone ? (
+                                  <div className="flex flex-col">
+                                    <SimpleInput
+                                      initialValue={u.phone}
+                                      onSave={(val) => handleFieldChange(u.uid, 'phone', val)}
+                                      placeholder="Phone"
+                                      type="tel"
+                                    />
+                                    <div className="flex gap-4 mt-2 px-1">
+                                      <a href={`tel:${u.phone.replace(/\D/g, '')}`} className="text-xs font-medium text-blue-500 hover:text-blue-700">Call Phone</a>
+                                      <a href={`https://wa.me/${u.phone.replace(/\D/g, '')}`} target="_blank" rel="noopener noreferrer" className="text-xs font-medium text-emerald-500 hover:text-emerald-700">WhatsApp</a>
+                                    </div>
+                                  </div>
+                               ) : (
+                                  <SimpleInput
+                                    initialValue={u.phone || ''}
+                                    onSave={(val) => handleFieldChange(u.uid, 'phone', val)}
+                                    placeholder="Phone"
+                                    type="tel"
+                                  />
+                               )}
+                             </div>
+                             <div>
+                               <label className="block tracking-wide text-xs font-semibold mb-2 text-slate-500">{t('settings.telegramIdLabel')}</label>
+                               <TelegramIdInput
+                                 initialValue={u.telegramChatId || ''}
+                                 onSave={(val) => handleTelegramIdChange(u.uid, val)}
+                                 placeholder={t('settings.telegramIdPlaceholder') || 'ID...'}
+                               />
+                             </div>
+                           </div>
+                        </td>
+                      </tr>
+                    )}
+                    </React.Fragment>
+                  )})}
                 </tbody>
               </table>
             </div>

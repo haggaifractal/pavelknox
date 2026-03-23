@@ -36,6 +36,7 @@ interface AuthContextType {
     isAdmin: boolean;
     isViewer: boolean;
     permissions: UserPermissions;
+    departmentIds: string[];
 }
 
 const AuthContext = createContext<AuthContextType>({ 
@@ -45,7 +46,8 @@ const AuthContext = createContext<AuthContextType>({
     isSuperAdmin: false, 
     isAdmin: false, 
     isViewer: false,
-    permissions: DEFAULT_PERMISSIONS
+    permissions: DEFAULT_PERMISSIONS,
+    departmentIds: []
 });
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
@@ -53,6 +55,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const [loading, setLoading] = useState(true);
     const [role, setRole] = useState<UserRole>(null);
     const [permissions, setPermissions] = useState<UserPermissions>(DEFAULT_PERMISSIONS);
+    const [departmentIds, setDepartmentIds] = useState<string[]>([]);
 
     useEffect(() => {
         const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
@@ -75,6 +78,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                         const dbRole = (userData.role as UserRole) || userRole;
                         setRole(dbRole); // Update state to reflect true DB role
                         
+                        // Set departments
+                        setDepartmentIds(Array.isArray(userData.departmentIds) ? userData.departmentIds : []);
+
                         // Base permissions depend on true role
                         const basePermissions = (dbRole === 'admin' || dbRole === 'superadmin') ? ADMIN_PERMISSIONS : DEFAULT_PERMISSIONS;
 
@@ -91,6 +97,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                     } else {
                         // Fallback logic if document doesn't exist yet
                         setPermissions(userRole === 'admin' || userRole === 'superadmin' ? ADMIN_PERMISSIONS : DEFAULT_PERMISSIONS);
+                        setDepartmentIds([]);
                     }
                     
                     setUser(firebaseUser);
@@ -101,11 +108,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                     await auth.signOut().catch(console.error);
                     setRole(null);
                     setPermissions(DEFAULT_PERMISSIONS);
+                    setDepartmentIds([]);
                     setUser(null);
                 }
             } else {
                 setRole(null);
                 setPermissions(DEFAULT_PERMISSIONS);
+                setDepartmentIds([]);
                 setUser(null);
             }
             setLoading(false);
@@ -121,7 +130,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     // Optional Safety: Even if doc was missing, if token confirms admin, grant admin permissions broadly. (Adjust depending on strictness needed)
 
     return (
-        <AuthContext.Provider value={{ user, loading, role, isSuperAdmin, isAdmin, isViewer, permissions }}>
+        <AuthContext.Provider value={{ user, loading, role, isSuperAdmin, isAdmin, isViewer, permissions, departmentIds }}>
             {children}
         </AuthContext.Provider>
     );

@@ -10,7 +10,7 @@ export async function PATCH(request: Request, context: { params: Promise<{ uid: 
     const resolvedParams = await context.params;
     const uid = resolvedParams.uid;
     const body = await request.json();
-    const { role, departmentIds, telegramChatId } = body;
+    const { firstName, lastName, phone, role, departmentIds, telegramChatId } = body;
 
     // Get current claims to preserve existing role if only departments changed, or vice versa
     const userRecord = await adminAuth.getUser(uid);
@@ -36,15 +36,36 @@ export async function PATCH(request: Request, context: { params: Promise<{ uid: 
 
     // Update Firestore info if provided
     let previousTelegramId: string | undefined;
+    let previousFirstName: string | undefined;
+    let previousLastName: string | undefined;
+    let previousPhone: string | undefined;
     const { adminDb } = await import('@/lib/firebase/admin');
     
-    if (telegramChatId !== undefined) {
+    if (telegramChatId !== undefined || firstName !== undefined || lastName !== undefined || phone !== undefined) {
       const userDoc = await adminDb.collection('users').doc(uid).get();
-      previousTelegramId = userDoc.data()?.telegramChatId;
+      const data = userDoc.data() || {};
+      previousTelegramId = data.telegramChatId;
+      previousFirstName = data.firstName;
+      previousLastName = data.lastName;
+      previousPhone = data.phone;
       
-      await adminDb.collection('users').doc(uid).set({
-        telegramChatId: telegramChatId
-      }, { merge: true });
+      const updateData: any = {};
+      if (telegramChatId !== undefined) updateData.telegramChatId = telegramChatId;
+      if (firstName !== undefined) updateData.firstName = firstName;
+      if (lastName !== undefined) updateData.lastName = lastName;
+      if (phone !== undefined) updateData.phone = phone;
+
+      // Update displayName if firstName or lastName change 
+      if (firstName !== undefined || lastName !== undefined) {
+         const newFirst = firstName !== undefined ? firstName : (previousFirstName || '');
+         const newLast = lastName !== undefined ? lastName : (previousLastName || '');
+         const newDisplayName = `${newFirst} ${newLast}`.trim();
+         updateData.displayName = newDisplayName;
+         // Also update Firebase Auth displayName
+         await adminAuth.updateUser(uid, { displayName: newDisplayName }).catch(console.error);
+      }
+      
+      await adminDb.collection('users').doc(uid).set(updateData, { merge: true });
     }
 
     // Audit Log Registration
@@ -57,6 +78,15 @@ export async function PATCH(request: Request, context: { params: Promise<{ uid: 
     }
     if (telegramChatId !== undefined && telegramChatId !== previousTelegramId) {
        changes.telegramChatId = { from: previousTelegramId || '', to: telegramChatId };
+    }
+    if (firstName !== undefined && firstName !== previousFirstName) {
+       changes.firstName = { from: previousFirstName || '', to: firstName };
+    }
+    if (lastName !== undefined && lastName !== previousLastName) {
+       changes.lastName = { from: previousLastName || '', to: lastName };
+    }
+    if (phone !== undefined && phone !== previousPhone) {
+       changes.phone = { from: previousPhone || '', to: phone };
     }
 
     if (Object.keys(changes).length > 0) {
@@ -94,7 +124,23 @@ export async function DELETE(request: Request, context: { params: Promise<{ uid:
 
     await adminAuth.deleteUser(uid);
     const { adminDb } = await import('@/lib/firebase/admin');
-    await adminDb.collection('users').doc(uid).delete().catch(console.error);
+    const userDocRef = adminDb.collection('users').doc(uid);
+    const userDoc = await userDocRef.get();
+    const userEmail = await adminAuth.getUser(uid).then(u => u.email).catch(() => userDoc.data()?.email || 'unknown');
+    
+    await userDocRef.delete().catch(console.error);
+
+    await adminDb.collection('audit_logs').add({
+      action: 'DELETE_USER',
+      entityType: 'user',
+      entityId: uid,
+      targetEmail: userEmail,
+      userId: auth.uid,
+      userEmail: auth.email || 'system',
+      details: `Deleted user ${userEmail}`,
+      metadata: {},
+      createdAt: new Date()
+    }).catch(console.error);
 
     return NextResponse.json({ success: true, message: 'User deleted' });
   } catch (err: any) {

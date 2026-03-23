@@ -22,7 +22,7 @@ export default function KnowledgeViewPage({ params }: KnowledgeViewProps) {
     const docId = resolvedParams.id;
     const router = useRouter();
     const { t } = useTranslation();
-    const { user, isAdmin, permissions } = useAuth();
+    const { user, isAdmin, isSuperAdmin, permissions, departmentIds } = useAuth();
 
     const [document, setDocument] = useState<any>(null);
     const [loading, setLoading] = useState(true);
@@ -142,7 +142,17 @@ export default function KnowledgeViewPage({ params }: KnowledgeViewProps) {
             try {
                 const docSnap = await getDoc(doc(db, 'knowledge_base', docId));
                 if (docSnap.exists()) {
-                    setDocument({ id: docSnap.id, ...docSnap.data() });
+                    const data = docSnap.data();
+                    if (data.isDeleted === true) return;
+                    
+                    const isGlobal = !data.visibilityScope || data.visibilityScope === 'global';
+                    const userDeptIds = departmentIds || [];
+                    const hasIntersection = data.departmentIds?.some((id: string) => userDeptIds.includes(id));
+                    const canView = isSuperAdmin || isGlobal || hasIntersection;
+
+                    if (canView) {
+                        setDocument({ id: docSnap.id, ...data });
+                    }
                 }
             } catch (err) {
                 console.error(err);

@@ -34,7 +34,7 @@ export function usePendingDrafts(filter: DraftFilter = { status: 'pending' }, pa
     const [hasMore, setHasMore] = useState(true);
     const [error, setError] = useState<Error | null>(null);
     const [currentLimit, setCurrentLimit] = useState(pageSize);
-    const { user, isAdmin } = useAuth();
+    const { user, isSuperAdmin, departmentIds } = useAuth();
 
     // Reset pagination limit when filters change
     useEffect(() => {
@@ -62,14 +62,14 @@ export function usePendingDrafts(filter: DraftFilter = { status: 'pending' }, pa
         
         const unsubscribe = onSnapshot(q, (snapshot) => {
             const results: Draft[] = [];
-            const userDeptIds = (user as any)?.departmentIds || [];
+            const userDeptIds = departmentIds || [];
             snapshot.forEach((doc) => {
                 const data = doc.data();
                 if (data.isDeleted === true) return;
                 
                 const isGlobal = !data.visibilityScope || data.visibilityScope === 'global';
                 const hasIntersection = data.departmentIds?.some((id: string) => userDeptIds.includes(id));
-                const canView = isAdmin || isGlobal || hasIntersection;
+                const canView = isSuperAdmin || isGlobal || hasIntersection;
 
                 if (canView) {
                     results.push({

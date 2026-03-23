@@ -30,7 +30,18 @@ export default function LoginPage() {
         setSuccessMsg('');
 
         try {
-            await signInWithEmailAndPassword(auth, email, password);
+            const userCredential = await signInWithEmailAndPassword(auth, email, password);
+            
+            // Call audit log API in background
+            userCredential.user.getIdToken().then(token => {
+                fetch('/api/audit/login', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                }).catch(err => console.error('Failed to log login access', err));
+            });
+
             router.push('/');
         } catch (err: any) {
             setError(t('login.errorIncorrect'));
